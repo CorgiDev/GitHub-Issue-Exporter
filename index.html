@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GitHub Issue Exporter</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>GitHub Issue Exporter</h1>
+
+      <form id="search-form" class="search-form">
+        <label>
+          GitHub Access Token
+          <input
+            type="password"
+            id="token"
+            name="token"
+            placeholder="ghp_..."
+            autocomplete="off"
+            required
+          />
+        </label>
+
+        <label>
+          Repository Owner
+          <input type="text" id="owner" name="owner" placeholder="e.g., microsoft" required />
+        </label>
+
+        <label>
+          Repository Name
+          <input type="text" id="repo" name="repo" placeholder="e.g., vscode" required />
+        </label>
+
+        <label>
+          Labels to Include (comma-separated)
+          <input type="text" id="includeLabels" name="includeLabels" placeholder="bug,help wanted" />
+        </label>
+
+        <label>
+          Labels to Exclude (comma-separated)
+          <input type="text" id="excludeLabels" name="excludeLabels" placeholder="duplicate,wontfix" />
+        </label>
+
+        <div class="form-actions">
+          <button type="submit">Search Open Issues</button>
+          <button type="button" id="signOutButton" class="secondary-button">Sign out</button>
+        </div>
+      </form>
+
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+
+      <div class="table-wrap">
+        <table id="results-table" hidden>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Title</th>
+              <th>Labels</th>
+              <th>Created Date</th>
+              <th>Labels on Issue</th>
+              <th>Issue URL</th>
+            </tr>
+          </thead>
+          <tbody id="results-body"></tbody>
+        </table>
+      </div>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
