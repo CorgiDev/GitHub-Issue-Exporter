@@ -3,6 +3,14 @@ const statusText = document.getElementById('status');
 const resultsTable = document.getElementById('results-table');
 const resultsBody = document.getElementById('results-body');
 const signOutButton = document.getElementById('signOutButton');
+const exportSection = document.getElementById('export-section');
+const exportButton = document.getElementById('exportButton');
+
+let currentIssues = [];
+let currentToken = '';
+let currentOwner = '';
+let currentRepo = '';
+
 const AUTH_ERROR_MESSAGE =
   'Results could not be fetched because the user is either not logged in or does not have sufficient privileges for the repo they wish to query.';
 
@@ -79,14 +87,27 @@ const fetchAllOpenIssues = async (owner, repo, token) => {
   return collected;
 };
 
-const filterByLabels = (issues, includeLabels, excludeLabels) =>
+const filterByLabels = (issues, includeLabelsAll, includeLabelsAny, excludeLabelsAny, excludeLabelsAll) =>
   issues.filter((issue) => {
     const issueLabels = issue.labels.map((label) => label.name.toLowerCase());
 
-    const matchesIncluded = includeLabels.every((label) => issueLabels.includes(label));
-    const hasExcluded = excludeLabels.some((label) => issueLabels.includes(label));
+    // Include Logic: ALL specified labels must be present (AND)
+    const matchesIncludeAll = includeLabelsAll.length === 0 ||
+      includeLabelsAll.every((label) => issueLabels.includes(label));
 
-    return matchesIncluded && !hasExcluded;
+    // Include Logic: At least ONE specified label must be present (OR)
+    const matchesIncludeAny = includeLabelsAny.length === 0 ||
+      includeLabelsAny.some((label) => issueLabels.includes(label));
+
+    // Exclude Logic: If ANY specified label is present, exclude (OR)
+    const hasAnyExcluded = excludeLabelsAny.length > 0 &&
+      excludeLabelsAny.some((label) => issueLabels.includes(label));
+
+    // Exclude Logic: Only if ALL specified labels are present, exclude (AND)
+    const hasAllExcluded = excludeLabelsAll.length > 0 &&
+      excludeLabelsAll.every((label) => issueLabels.includes(label));
+
+    return matchesIncludeAll && matchesIncludeAny && !hasAnyExcluded && !hasAllExcluded;
   });
 
 const renderRows = (issues) => {
@@ -128,8 +149,10 @@ form.addEventListener('submit', async (event) => {
   const token = form.token.value.trim();
   const owner = form.owner.value.trim();
   const repo = form.repo.value.trim();
-  const includeLabels = parseLabels(form.includeLabels.value);
-  const excludeLabels = parseLabels(form.excludeLabels.value);
+  const includeLabelsAll = parseLabels(form.includeLabelsAll.value);
+  const includeLabelsAny = parseLabels(form.includeLabelsAny.value);
+  const excludeLabelsAny = parseLabels(form.excludeLabelsAny.value);
+  const excludeLabelsAll = parseLabels(form.excludeLabelsAll.value);
 
   const submitButton = form.querySelector('button[type="submit"]');
 
@@ -143,13 +166,20 @@ form.addEventListener('submit', async (event) => {
     updateSignOutButtonState();
 
     const openIssues = await fetchAllOpenIssues(owner, repo, token);
-    const filteredIssues = filterByLabels(openIssues, includeLabels, excludeLabels);
+    const filteredIssues = filterByLabels(openIssues, includeLabelsAll, includeLabelsAny, excludeLabelsAny, excludeLabelsAll);
+
+    currentIssues = filteredIssues;
+    currentToken = token;
+    currentOwner = owner;
+    currentRepo = repo;
 
     renderRows(filteredIssues);
     statusText.textContent = `Found ${filteredIssues.length} open issue(s).`;
+    exportSection.hidden = filteredIssues.length === 0;
   } catch (error) {
     resultsBody.innerHTML = '';
     resultsTable.hidden = true;
+    exportSection.hidden = true;
     statusText.textContent = error.message;
   } finally {
     submitButton.disabled = false;
@@ -174,4 +204,594 @@ signOutButton.addEventListener('click', () => {
   statusText.textContent = 'Signed out. Enter a GitHub access token to search issues.';
   resultsBody.innerHTML = '';
   resultsTable.hidden = true;
+  exportSection.hidden = true;
+  currentIssues = [];
+});
+
+// Export Functionality
+const fetchIssueComments = async (owner, repo, issueNumber, token) => {
+  const comments = [];
+  let page = 1;
+
+  while (true) {
+    const response = await fetch(
+      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}/comments?per_page=100&page=${page}`,
+      { headers: buildHeaders(token) }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch comments for issue #${issueNumber}`);
+    }
+
+    const data = await response.json();
+    comments.push(...data);
+
+    if (data.length < 100) break;
+    page += 1;
+  }
+
+  return comments;
+};
+
+const downloadAsDataUrl = async (url) => {
+  try {
+    // Skip data URLs (already embedded)
+    if (url.startsWith('data:')) return url;
+    
+    // Skip relative URLs and invalid URLs
+    try {
+      new URL(url);
+    } catch {
+      return null;
+    }
+    
+    const response = await fetch(url, {
+      mode: 'cors',
+      cache: 'default'
+    });
+    
+    if (!response.ok) return null;
+
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    // CORS or network error - return null to keep original URL
+    console.warn(`Failed to download media: ${url}`, error);
+    return null;
+  }
+};
+
+const extractMediaUrls = (content, isHtml = false) => {
+  const urls = [];
+  
+  if (!content) return urls;
+  
+  let match;
+  
+  if (!isHtml) {
+    // Extract from Markdown: ![alt](url)
+    const imgRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+    while ((match = imgRegex.exec(content))) {
+      urls.push({ type: 'image', url: match[2], alt: match[1] });
+    }
+  }
+  
+  // Extract from HTML tags (works for both markdown with HTML and pure HTML)
+  // Images: <img src="..." /> or <img src='...' />
+  const imgSrcRegex = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
+  while ((match = imgSrcRegex.exec(content))) {
+    urls.push({ type: 'image', url: match[1], alt: '' });
+  }
+  
+  // Videos: <video src="..." />
+  const videoSrcRegex = /<video[^>]+src=["']([^"']+)["'][^>]*>/gi;
+  while ((match = videoSrcRegex.exec(content))) {
+    urls.push({ type: 'video', url: match[1], alt: '' });
+  }
+  
+  // Source tags inside video: <source src="..." />
+  const sourceSrcRegex = /<source[^>]+src=["']([^"']+)["'][^>]*>/gi;
+  while ((match = sourceSrcRegex.exec(content))) {
+    urls.push({ type: 'video', url: match[1], alt: '' });
+  }
+  
+  // srcset attributes (responsive images)
+  const srcsetRegex = /srcset=["']([^"']+)["']/gi;
+  while ((match = srcsetRegex.exec(content))) {
+    // srcset can have multiple URLs separated by commas with descriptors
+    const srcsetUrls = match[1].split(',').map(s => s.trim().split(/\s+/)[0]);
+    srcsetUrls.forEach(url => {
+      if (url) urls.push({ type: 'image', url, alt: '' });
+    });
+  }
+  
+  // Direct links to common image/video formats
+  const directMediaRegex = /https?:\/\/[^\s<>"]+\.(?:jpg|jpeg|png|gif|webp|svg|mp4|webm|mov|avi)/gi;
+  while ((match = directMediaRegex.exec(content))) {
+    urls.push({ type: 'media', url: match[0], alt: '' });
+  }
+
+  return urls;
+};
+
+const replaceMediaWithDataUrls = async (content, mediaMap) => {
+  if (!content) return content;
+  
+  let result = content;
+
+  for (const [url, dataUrl] of Object.entries(mediaMap)) {
+    // Only replace if we successfully downloaded the media and it's different from original
+    if (dataUrl && url !== dataUrl) {
+      // Use split/join to avoid regex escaping issues
+      result = result.split(url).join(dataUrl);
+    }
+  }
+
+  return result;
+};
+
+const generateOfflineSiteCSS = () => `
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif;
+  color: #24292f;
+  background: #f6f8fa;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 2rem 1rem;
+  line-height: 1.6;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  background: #ffffff;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+h1 {
+  margin-top: 0;
+  color: #0969da;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 1rem;
+  color: #0969da;
+  text-decoration: none;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
+.issue-meta {
+  color: #57606a;
+  margin: 1rem 0;
+  font-size: 0.95rem;
+}
+
+.label-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.label-chip {
+  border-radius: 999px;
+  background: #ddf4ff;
+  border: 1px solid #54aeff;
+  color: #0969da;
+  font-size: 0.85rem;
+  padding: 0.2rem 0.6rem;
+  font-weight: 500;
+}
+
+.collapsible {
+  background: #f6f8fa;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  margin: 1.5rem 0;
+}
+
+.collapsible-header {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.collapsible-header:hover {
+  background: #eaeef2;
+}
+
+.collapsible-content {
+  padding: 1rem;
+  border-top: 1px solid #d0d7de;
+}
+
+.collapsible-content.collapsed {
+  display: none;
+}
+
+.issue-body, .comment-body {
+  padding: 1rem;
+  background: #ffffff;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  margin: 1rem 0;
+}
+
+.comment {
+  margin-bottom: 1.5rem;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+}
+
+.comment-header {
+  background: #f6f8fa;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #d0d7de;
+  font-size: 0.9rem;
+  color: #57606a;
+}
+
+.comment-body {
+  border: none;
+  margin: 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+}
+
+th, td {
+  text-align: left;
+  padding: 0.75rem;
+  border-bottom: 1px solid #d0d7de;
+}
+
+th {
+  background: #f6f8fa;
+  font-weight: 600;
+}
+
+tr:hover {
+  background: #f6f8fa;
+}
+
+a {
+  color: #0969da;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+img, video {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+pre {
+  background: #f6f8fa;
+  padding: 1rem;
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+code {
+  background: #f6f8fa;
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+}
+`;
+
+const generateIndexHTML = (issues, owner, repo) => {
+  const issuesRows = issues
+    .map((issue) => {
+      const labels = issue.labels.map((label) => label.name);
+      const labelsText = labels.length ? labels.join(', ') : 'None';
+      const labelChips = labels.length
+        ? labels.map((labelName) => `<span class="label-chip">${escapeHtml(labelName)}</span>`).join('')
+        : '<span>None</span>';
+
+      return `
+        <tr>
+          <td>${issue.number}</td>
+          <td><a href="issue-${issue.number}.html">${escapeHtml(issue.title)}</a></td>
+          <td>${escapeHtml(labelsText)}</td>
+          <td>${formatDate(issue.created_at)}</td>
+          <td><div class="label-list">${labelChips}</div></td>
+          <td><a href="${issue.html_url}" target="_blank" rel="noopener">Original Issue</a></td>
+        </tr>
+      `;
+    })
+    .join('');
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GitHub Issues - ${escapeHtml(owner)}/${escapeHtml(repo)}</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <h1>GitHub Issues: ${escapeHtml(owner)}/${escapeHtml(repo)}</h1>
+    <p>Exported on ${new Date().toLocaleString()}</p>
+    <p><strong>${issues.length}</strong> issue(s) found</p>
+    
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Title</th>
+          <th>Labels</th>
+          <th>Created Date</th>
+          <th>Labels on Issue</th>
+          <th>Original URL</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${issuesRows}
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>`;
+};
+
+const generateIssueHTML = (issue, comments, owner, repo) => {
+  const labels = issue.labels.map((label) => label.name);
+  const labelChips = labels.length
+    ? labels.map((labelName) => `<span class="label-chip">${escapeHtml(labelName)}</span>`).join('')
+    : '<span>None</span>';
+
+  const commentsHTML = comments.length
+    ? comments
+        .map(
+          (comment) => `
+        <div class="comment">
+          <div class="comment-header">
+            <strong>${escapeHtml(comment.user?.login || 'Unknown')}</strong> commented on ${formatDate(comment.created_at)}
+          </div>
+          <div class="comment-body">
+            ${comment.body_html || escapeHtml(comment.body || '')}
+          </div>
+        </div>
+      `
+        )
+        .join('')
+    : '<p>No comments</p>';
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Issue #${issue.number}: ${escapeHtml(issue.title)}</title>
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    function toggleCollapsible(element) {
+      const content = element.nextElementSibling;
+      content.classList.toggle('collapsed');
+      const arrow = element.querySelector('.arrow');
+      arrow.textContent = content.classList.contains('collapsed') ? '▶' : '▼';
+    }
+  </script>
+</head>
+<body>
+  <div class="container">
+    <a href="index.html" class="back-link">← Back to Issues List</a>
+    
+    <h1>#${issue.number}: ${escapeHtml(issue.title)}</h1>
+    
+    <div class="issue-meta">
+      <strong>ID:</strong> ${issue.number}<br>
+      <strong>Created:</strong> ${formatDate(issue.created_at)}<br>
+      <strong>Author:</strong> ${escapeHtml(issue.user?.login || 'Unknown')}<br>
+      <strong>State:</strong> ${escapeHtml(issue.state)}<br>
+      <strong>Original:</strong> <a href="${issue.html_url}" target="_blank">${issue.html_url}</a>
+    </div>
+    
+    <div class="collapsible">
+      <div class="collapsible-header" onclick="toggleCollapsible(this)">
+        <span>Labels</span>
+        <span class="arrow">▼</span>
+      </div>
+      <div class="collapsible-content">
+        <div class="label-list">${labelChips}</div>
+      </div>
+    </div>
+    
+    <h2>Description</h2>
+    <div class="issue-body">
+      ${issue.body_html || escapeHtml(issue.body || 'No description provided.')}
+    </div>
+    
+    <div class="collapsible">
+      <div class="collapsible-header" onclick="toggleCollapsible(this)">
+        <span>Comments (${comments.length})</span>
+        <span class="arrow">▼</span>
+      </div>
+      <div class="collapsible-content">
+        ${commentsHTML}
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+};
+
+exportButton.addEventListener('click', async () => {
+  if (!currentIssues.length) return;
+
+  exportButton.disabled = true;
+  statusText.textContent = 'Preparing export...';
+
+  try {
+    const zip = new JSZip();
+    const mediaMap = {};
+
+    // Fetch full issue details with HTML bodies
+    statusText.textContent = `Fetching details for ${currentIssues.length} issue(s)...`;
+
+    const detailedIssues = await Promise.all(
+      currentIssues.map(async (issue) => {
+        const response = await fetch(
+          `https://api.github.com/repos/${encodeURIComponent(currentOwner)}/${encodeURIComponent(currentRepo)}/issues/${issue.number}`,
+          {
+            headers: {
+              ...buildHeaders(currentToken),
+              Accept: 'application/vnd.github.html+json',
+            },
+          }
+        );
+
+        if (!response.ok) return issue;
+        return await response.json();
+      })
+    );
+
+    // Fetch comments for each issue
+    statusText.textContent = 'Fetching comments...';
+    const issuesWithComments = await Promise.all(
+      detailedIssues.map(async (issue) => {
+        const comments = await fetchIssueComments(currentOwner, currentRepo, issue.number, currentToken);
+
+        // Fetch HTML version of comments
+        const commentsWithHtml = await Promise.all(
+          comments.map(async (comment) => {
+            const response = await fetch(comment.url, {
+              headers: {
+                ...buildHeaders(currentToken),
+                Accept: 'application/vnd.github.html+json',
+              },
+            });
+
+            if (!response.ok) return comment;
+            return await response.json();
+          })
+        );
+
+        return { ...issue, comments: commentsWithHtml };
+      })
+    );
+
+    // Extract and download media
+    statusText.textContent = 'Downloading media assets...';
+    const allMedia = [];
+
+    issuesWithComments.forEach((issue) => {
+      // Extract from markdown body
+      if (issue.body) {
+        allMedia.push(...extractMediaUrls(issue.body, false));
+      }
+      // Extract from HTML-rendered body
+      if (issue.body_html) {
+        allMedia.push(...extractMediaUrls(issue.body_html, true));
+      }
+      
+      // Extract from comments
+      issue.comments.forEach((comment) => {
+        if (comment.body) {
+          allMedia.push(...extractMediaUrls(comment.body, false));
+        }
+        if (comment.body_html) {
+          allMedia.push(...extractMediaUrls(comment.body_html, true));
+        }
+      });
+    });
+
+    const uniqueUrls = [...new Set(allMedia.map((m) => m.url))]
+      .filter(url => {
+        // Filter out data URLs (already embedded) and invalid URLs
+        if (!url || url.startsWith('data:')) return false;
+        try {
+          new URL(url);
+          return true;
+        } catch {
+          return false;
+        }
+      });
+      
+    let downloadedCount = 0;
+    let successCount = 0;
+
+    for (const url of uniqueUrls) {
+      downloadedCount++;
+      statusText.textContent = `Downloading media ${downloadedCount}/${uniqueUrls.length}...`;
+      const dataUrl = await downloadAsDataUrl(url);
+      if (dataUrl) {
+        mediaMap[url] = dataUrl;
+        successCount++;
+      }
+    }
+
+    // Replace media URLs with data URLs
+    for (const issue of issuesWithComments) {
+      if (issue.body_html) {
+        issue.body_html = await replaceMediaWithDataUrls(issue.body_html, mediaMap);
+      }
+      for (const comment of issue.comments) {
+        if (comment.body_html) {
+          comment.body_html = await replaceMediaWithDataUrls(comment.body_html, mediaMap);
+        }
+      }
+    }
+
+    // Generate files
+    statusText.textContent = 'Generating HTML files...';
+
+    zip.file('styles.css', generateOfflineSiteCSS());
+    zip.file('index.html', generateIndexHTML(issuesWithComments, currentOwner, currentRepo));
+
+    issuesWithComments.forEach((issue) => {
+      const html = generateIssueHTML(issue, issue.comments, currentOwner, currentRepo);
+      zip.file(`issue-${issue.number}.html`, html);
+    });
+
+    // Generate and download zip
+    statusText.textContent = 'Creating archive...';
+    const blob = await zip.generateAsync({ type: 'blob' });
+
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${currentOwner}-${currentRepo}-issues-${Date.now()}.zip`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+
+    statusText.textContent = `Export complete! Downloaded ${issuesWithComments.length} issue(s) with ${successCount}/${uniqueUrls.length} media asset(s).`;
+  } catch (error) {
+    statusText.textContent = `Export failed: ${error.message}`;
+  } finally {
+    exportButton.disabled = false;
+  }
 });

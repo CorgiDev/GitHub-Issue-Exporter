@@ -33,15 +33,22 @@
           <input type="text" id="repo" name="repo" placeholder="e.g., vscode" required />
         </label>
 
-        <label>
-          Labels to Include (comma-separated)
-          <input type="text" id="includeLabels" name="includeLabels" placeholder="bug,help wanted" />
-        </label>
+        <label for="includeLabelsAll">Include Labels - ALL (separated by commas)</label>
+        <span id="includeLabelsAllDescription">List labels that ALL must be on an issue.</span>
+        <input type="text" id="includeLabelsAll" name="includeLabelsAll" placeholder="bug,regression" />
+        
 
-        <label>
-          Labels to Exclude (comma-separated)
-          <input type="text" id="excludeLabels" name="excludeLabels" placeholder="duplicate,wontfix" />
-        </label>
+        <label for="includeLabelsAny">Include Labels - ANY (separated by commas)</label>
+        <span id="includeLabelsAnyDescription">List labels where at least ONE of them must be on an issue.</span>
+        <input type="text" id="includeLabelsAny" name="includeLabelsAny" placeholder="help wanted,good first issue" />
+
+        <label for="excludeLabelsAll">Exclude Labels - ALL (separated by commas)</label>
+        <span id="excludeLabelsAllDescription">List labels that ALL must NOT be on an issue.</span>
+        <input type="text" id="excludeLabelsAll" name="excludeLabelsAll" placeholder="needs-info,stale" />
+
+        <label for="excludeLabelsAny">Exclude Labels - ANY (separated by commas)</label>
+        <span id="excludeLabelsAnyDescription">List labels where any ONE of them must NOT be on an issue.</span>
+        <input type="text" id="excludeLabelsAny" name="excludeLabelsAny" placeholder="duplicate,wontfix" />
 
         <div class="form-actions">
           <button type="submit">Search Open Issues</button>
@@ -50,6 +57,10 @@
       </form>
 
       <p id="status" class="status" role="status" aria-live="polite"></p>
+
+      <div id="export-section" class="export-section" hidden>
+        <button type="button" id="exportButton" class="export-button">Export as Offline HTML</button>
+      </div>
 
       <div class="table-wrap">
         <table id="results-table" hidden>
@@ -68,6 +79,7 @@
       </div>
     </main>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

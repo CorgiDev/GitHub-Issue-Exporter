@@ -77,6 +77,15 @@ button:disabled {
   margin: 1rem 0;
 }
 
+.export-section {
+  margin: 1rem 0;
+  text-align: center;
+}
+
+.export-button {
+  background: #059669;
+}
+
 .table-wrap {
   overflow-x: auto;
   background: #ffffff;
