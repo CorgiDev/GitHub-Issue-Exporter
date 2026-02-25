@@ -48,30 +48,39 @@
         
         <fieldset id="labelFiltersFields" aria-describedby="fieldsetDescriptor">
             <legend>Label Filters</legend>
-            <span id="fieldsetDescriptor">Groups of labels should be separated by commas (e.g., a11y,Sev1), and labels are case sensitive.</span>
+            <span id="fieldsetDescriptor">
+                <ul>
+                    <li>Use the "Load Repo Labels" button to populate the label options for the following fields.</li>
+                    <li>Select multiple labels by holding <kbd>Ctrl</kbd> (Windows) or <kbd>Cmd</kbd> (Mac).</li>
+                </ul>
+            </span>
+            <div id="loadLabelsButtonDiv">
+                <button type="button" id="fetchLabelsButton" class="secondary-button">Load Repo Labels</button>
+                <span id="labelFetchStatus" class="status-small"></span>
+            </div>
             <div>
                 <label for="includeLabelsAll">Include Labels - ALL</label>
-                <span class="descriptionText" id="includeLabelsAllDescription">Filters for issues that have all of the specified labels.</span>
+                <span class="descriptionText" id="includeLabelsAllDescription">Filters for issues that have all of the selected labels.</span>
                 <br>
-                <input type="text" id="includeLabelsAll" name="includeLabelsAll" placeholder="bug,regression" />
+                <select id="includeLabelsAll" name="includeLabelsAll" multiple size="5" class="label-select"></select>
             </div>
             <div>
                 <label for="includeLabelsAny">Include Labels - ANY</label>
-                <span class="descriptionText" id="includeLabelsAnyDescription">Filters for issues that have any of the specified labels.</span>
+                <span class="descriptionText" id="includeLabelsAnyDescription">Filters for issues that have any of the selected labels.</span>
                 <br>
-                <input type="text" id="includeLabelsAny" name="includeLabelsAny" placeholder="help wanted,good first issue" />
+                <select id="includeLabelsAny" name="includeLabelsAny" multiple size="5" class="label-select"></select>
             </div>
             <div>
                 <label for="excludeLabelsAll">Exclude Labels - ALL</label>
-                <span class="descriptionText" id="excludeLabelsAllDescription">Filters out issues that have all of the specified labels.</span>
+                <span class="descriptionText" id="excludeLabelsAllDescription">Filters out issues that have all of the selected labels.</span>
                 <br>
-                <input type="text" id="excludeLabelsAll" name="excludeLabelsAll" placeholder="needs-info,stale" />
+                <select id="excludeLabelsAll" name="excludeLabelsAll" multiple size="5" class="label-select"></select>
             </div>
             <div>
                 <label for="excludeLabelsAny">Exclude Labels - ANY</label>
-                <span class="descriptionText" id="excludeLabelsAnyDescription">Filters out issues that have any of the specified labels.</span>
+                <span class="descriptionText" id="excludeLabelsAnyDescription">Filters out issues that have any of the selected labels.</span>
                 <br>
-                <input type="text" id="excludeLabelsAny" name="excludeLabelsAny" placeholder="duplicate,wontfix" />
+                <select id="excludeLabelsAny" name="excludeLabelsAny" multiple size="5" class="label-select"></select>
             </div>
         </fieldset>
 

@@ -5,6 +5,9 @@ const resultsBody = document.getElementById('results-body');
 const signOutButton = document.getElementById('signOutButton');
 const exportSection = document.getElementById('export-section');
 const exportButton = document.getElementById('exportButton');
+const fetchLabelsButton = document.getElementById('fetchLabelsButton');
+const labelSelects = document.querySelectorAll('.label-select');
+const labelFetchStatus = document.getElementById('labelFetchStatus');
 
 let currentIssues = [];
 let currentToken = '';
@@ -19,11 +22,18 @@ let currentExcludeLabelsAll = [];
 const AUTH_ERROR_MESSAGE =
   'Results could not be fetched because the user is either not logged in or does not have sufficient privileges for the repo they wish to query.';
 
-const parseLabels = (raw) =>
-  raw
+const parseLabels = (inputElement) => {
+  if (!inputElement) return [];
+  
+  if (inputElement.tagName === 'SELECT') {
+    return Array.from(inputElement.selectedOptions).map(option => option.value.toLowerCase());
+  }
+  
+  return inputElement.value
     .split(',')
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean);
+};
 
 const formatDate = (isoDate) =>
   new Date(isoDate).toLocaleString(undefined, {
@@ -158,6 +168,77 @@ const renderRows = (issues) => {
   resultsTable.hidden = false;
 };
 
+
+const fetchRepoLabels = async (owner, repo, token) => {
+  const labels = [];
+  let page = 1;
+  
+  while (true) {
+    const url = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/labels?per_page=100&page=${page}`;
+    const response = await fetch(url, { headers: buildHeaders(token) });
+    
+    if (!response.ok) {
+      if (response.status === 404) throw new Error('Repository not found.');
+      if (response.status === 401) throw new Error('Unauthorized or invalid token.');
+      throw new Error(`Failed to fetch labels: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    labels.push(...data);
+    
+    if (data.length < 100) break;
+    page++;
+  }
+  return labels.sort((a,b) => a.name.localeCompare(b.name));
+};
+
+fetchLabelsButton.addEventListener('click', async () => {
+  const token = form.token.value.trim();
+  const owner = form.owner.value.trim();
+  const repo = form.repo.value.trim();
+  
+  if (!token || !owner || !repo) {
+    alert('Please provide Token, Owner, and Repo Name to fetch labels.');
+    return;
+  }
+  
+  fetchLabelsButton.disabled = true;
+  labelFetchStatus.textContent = 'Loading...';
+  
+  try {
+    const labels = await fetchRepoLabels(owner, repo, token);
+    
+    labelSelects.forEach(select => {
+      // Keep existing selection if any? No, clear is safer.
+      const currentlySelected = Array.from(select.selectedOptions).map(o => o.value);
+      select.innerHTML = '';
+      
+      labels.forEach(label => {
+        const option = document.createElement('option');
+        option.value = label.name;
+        option.textContent = label.name;
+        // visual hint for label color
+        option.style.borderLeft = `5px solid #${label.color}`;
+        option.style.paddingLeft = '5px';
+        
+        if (currentlySelected.includes(label.name)) {
+            option.selected = true;
+        }
+        
+        select.appendChild(option);
+      });
+    });
+    
+    labelFetchStatus.textContent = `Loaded ${labels.length} labels.`;
+    labelFetchStatus.className = 'status-success';
+  } catch (error) {
+    labelFetchStatus.textContent = `Error: ${error.message}`;
+    labelFetchStatus.className = 'status-error';
+  } finally {
+    fetchLabelsButton.disabled = false;
+  }
+});
+
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
 
@@ -166,10 +247,10 @@ form.addEventListener('submit', async (event) => {
   const repo = form.repo.value.trim();
   const stateFilter = form.stateFilter.value || 'open';
   console.log('Form submitted with state filter:', stateFilter, 'type:', typeof stateFilter);
-  const includeLabelsAll = parseLabels(form.includeLabelsAll.value);
-  const includeLabelsAny = parseLabels(form.includeLabelsAny.value);
-  const excludeLabelsAny = parseLabels(form.excludeLabelsAny.value);
-  const excludeLabelsAll = parseLabels(form.excludeLabelsAll.value);
+  const includeLabelsAll = parseLabels(form.includeLabelsAll);
+  const includeLabelsAny = parseLabels(form.includeLabelsAny);
+  const excludeLabelsAny = parseLabels(form.excludeLabelsAny);
+  const excludeLabelsAll = parseLabels(form.excludeLabelsAll);
 
   const submitButton = form.querySelector('button[type="submit"]');
 
