@@ -89,13 +89,13 @@ button[type="submit"] {
   background: #046836;
 }
 
-button:disabled {
-  opacity: 0.7;
-  cursor: wait;
+.secondary-button, .export-button {
+  background: #2563eb;
 }
 
-.secondary-button {
-  background: #6b7280;
+button:disabled,button[aria-disabled="true"] {
+  opacity: 0.7;
+  cursor: wait;
 }
 
 .loadLabelsButtonDiv {
@@ -110,10 +110,6 @@ button:disabled {
 .export-section {
   margin: 1rem 0;
   text-align: center;
-}
-
-.export-button {
-  background: #2563eb;
 }
 
 #export-section {
