@@ -256,10 +256,10 @@ const fetchIssueComments = async (owner, repo, issueNumber, token) => {
   return comments;
 };
 
-const downloadAsDataUrl = async (url) => {
+const downloadMediaAsBlob = async (url) => {
   try {
     // Skip data URLs (already embedded)
-    if (url.startsWith('data:')) return url;
+    if (url.startsWith('data:')) return null;
     
     // Skip relative URLs and invalid URLs
     try {
@@ -275,15 +275,9 @@ const downloadAsDataUrl = async (url) => {
     
     if (!response.ok) return null;
 
-    const blob = await response.blob();
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
-    });
+    return await response.blob();
   } catch (error) {
-    // CORS or network error - return null to keep original URL
+    // CORS or network error - return null
     console.warn(`Failed to download media: ${url}`, error);
     return null;
   }
@@ -342,16 +336,15 @@ const extractMediaUrls = (content, isHtml = false) => {
   return urls;
 };
 
-const replaceMediaWithDataUrls = async (content, mediaMap) => {
+const replaceMediaWithLocalPaths = async (content, mediaMap) => {
   if (!content) return content;
   
   let result = content;
 
-  for (const [url, dataUrl] of Object.entries(mediaMap)) {
-    // Only replace if we successfully downloaded the media and it's different from original
-    if (dataUrl && url !== dataUrl) {
+  for (const [url, localPath] of Object.entries(mediaMap)) {
+    if (localPath && url !== localPath) {
       // Use split/join to avoid regex escaping issues
-      result = result.split(url).join(dataUrl);
+      result = result.split(url).join(localPath);
     }
   }
 
@@ -700,14 +693,16 @@ exportButton.addEventListener('click', async () => {
     // Fetch full issue details with HTML bodies
     const issuesWithComments = await fetchIssuesWithDetails();
     
-    // Extract and download media
-    const uniqueUrls = await extractAndDownloadMedia(issuesWithComments, mediaMap);
-    
-    // Replace media URLs with data URLs
-    await replaceMediaWithDataUrlsInIssues(issuesWithComments, mediaMap);
-
     // Generate files
     statusText.textContent = 'Generating HTML files...';
+
+    const assetsFolder = zip.folder("assets");
+    
+    // Extract and download media
+    const uniqueUrls = await extractAndDownloadMedia(issuesWithComments, mediaMap, assetsFolder);
+    
+    // Replace media URLs with local paths
+    await replaceMediaWithLocalPathsInIssues(issuesWithComments, mediaMap);
 
     zip.file('styles.css', generateOfflineSiteCSS());
     zip.file('index.html', generateIndexHTML(issuesWithComments, currentOwner, currentRepo, {
@@ -787,7 +782,7 @@ async function fetchIssuesWithDetails() {
   );
 }
 
-async function extractAndDownloadMedia(issues, mediaMap) {
+async function extractAndDownloadMedia(issues, mediaMap, assetsFolder) {
   statusText.textContent = 'Downloading media assets...';
   const allMedia = [];
 
@@ -811,22 +806,43 @@ async function extractAndDownloadMedia(issues, mediaMap) {
   for (const url of uniqueUrls) {
     downloadedCount++;
     statusText.textContent = `Downloading media ${downloadedCount}/${uniqueUrls.length}...`;
-    const dataUrl = await downloadAsDataUrl(url);
-    if (dataUrl) {
-      mediaMap[url] = dataUrl;
+    
+    const blob = await downloadMediaAsBlob(url);
+    if (blob) {
+      // determine extension
+      let ext = 'bin';
+      const type = blob.type;
+      if (type.includes('/')) {
+        ext = type.split('/')[1].split(';')[0];
+      }
+      
+      // fallback to url extension if available
+      if (ext === 'bin' || ext === 'octet-stream') {
+        const urlExt = url.split('.').pop().split('?')[0].split('#')[0];
+        if (urlExt && urlExt.length < 5) ext = urlExt;
+      }
+
+      // Generate filename (simple counter or hash would be better but counter is enough here)
+      const filename = `media-${downloadedCount}.${ext}`;
+      
+      // Add to assets folder in zip
+      assetsFolder.file(filename, blob);
+      
+      // Update map with relative path
+      mediaMap[url] = `assets/${filename}`;
     }
   }
   return uniqueUrls;
 }
 
-async function replaceMediaWithDataUrlsInIssues(issues, mediaMap) {
+async function replaceMediaWithLocalPathsInIssues(issues, mediaMap) {
   for (const issue of issues) {
     if (issue.body_html) {
-      issue.body_html = await replaceMediaWithDataUrls(issue.body_html, mediaMap);
+      issue.body_html = await replaceMediaWithLocalPaths(issue.body_html, mediaMap);
     }
     for (const comment of issue.comments) {
       if (comment.body_html) {
-        comment.body_html = await replaceMediaWithDataUrls(comment.body_html, mediaMap);
+        comment.body_html = await replaceMediaWithLocalPaths(comment.body_html, mediaMap);
       }
     }
   }
