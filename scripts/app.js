@@ -63,6 +63,13 @@ const updateSignOutButtonState = () => {
   signOutButton.disabled = !form.token.value.trim();
 };
 
+const updateFetchLabelsButtonState = () => {
+  const token = form.token.value.trim();
+  const owner = form.owner.value.trim();
+  const repo = form.repo.value.trim();
+  fetchLabelsButton.disabled = !token || !owner || !repo;
+};
+
 const ensureAuthenticatedUser = async (token) => {
   const response = await fetch('https://api.github.com/user', {
     headers: buildHeaders(token),
@@ -319,7 +326,7 @@ form.addEventListener('submit', async (event) => {
 
   const submitButton = form.querySelector('button[type="submit"]');
 
-  statusText.textContent = `Loading ${stateFilter} issues...`;
+  statusText.innerHTML = `Loading ${stateFilter} issues... <br> Load times may vary based on number of issues identified and limitations on API calls to repo.`;
   submitButton.disabled = true;
   resultsTable.hidden = true;
 
@@ -361,9 +368,19 @@ if (storedToken) {
 }
 
 updateSignOutButtonState();
+updateFetchLabelsButtonState();
 
 form.token.addEventListener('input', () => {
   updateSignOutButtonState();
+  updateFetchLabelsButtonState();
+});
+
+form.owner.addEventListener('input', () => {
+  updateFetchLabelsButtonState();
+});
+
+form.repo.addEventListener('input', () => {
+  updateFetchLabelsButtonState();
 });
 
 signOutButton.addEventListener('click', () => {
@@ -402,7 +419,88 @@ const fetchIssueComments = async (owner, repo, issueNumber, token) => {
   return comments;
 };
 
-const downloadMediaAsBlob = async (url) => {
+const isLikelyMediaUrl = (url) => {
+  if (!url) return false;
+
+  const extensionPattern = /\.(?:jpg|jpeg|png|gif|webp|svg|mp4|webm|mov|avi)(?:[?#].*)?$/i;
+  if (extensionPattern.test(url)) return true;
+
+  try {
+    const parsedUrl = new URL(url);
+    const host = parsedUrl.hostname.toLowerCase();
+    const path = parsedUrl.pathname.toLowerCase();
+
+    if (host === 'github.com' && path.includes('/user-attachments/assets/')) return true;
+    if (host.endsWith('githubusercontent.com') && (path.includes('/user-images/') || path.includes('/assets/'))) return true;
+  } catch {
+    return false;
+  }
+
+  return false;
+};
+
+const decodeHtmlEntities = (value) => {
+  if (!value) return value;
+  return value
+    .replaceAll('&amp;', '&')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#39;', "'")
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>');
+};
+
+const normalizeMediaUrl = (url) => {
+  const decodedUrl = decodeHtmlEntities((url || '').trim());
+  if (!decodedUrl) return '';
+
+  try {
+    const parsed = new URL(decodedUrl);
+    // Normalize host casing and remove trailing punctuation often captured in markdown text
+    parsed.hostname = parsed.hostname.toLowerCase();
+    parsed.hash = parsed.hash;
+    return parsed.toString().replace(/[),.;]+$/, '');
+  } catch {
+    return decodedUrl.replace(/[),.;]+$/, '');
+  }
+};
+
+const buildDownloadCandidates = (url) => {
+  const candidates = [url];
+
+  try {
+    const parsedUrl = new URL(url);
+    const host = parsedUrl.hostname.toLowerCase();
+    const pathname = parsedUrl.pathname;
+
+    if (host === 'github.com' && pathname.includes('/user-attachments/assets/')) {
+      const withRaw = new URL(parsedUrl.toString());
+      withRaw.searchParams.set('raw', '1');
+      candidates.push(withRaw.toString());
+
+      const withDownload = new URL(parsedUrl.toString());
+      withDownload.searchParams.set('download', '1');
+      candidates.push(withDownload.toString());
+    }
+
+    if (host === 'github.com' && pathname.includes('/blob/')) {
+      const parts = pathname.split('/').filter(Boolean);
+      // /owner/repo/blob/branch/path/to/file
+      if (parts.length >= 5) {
+        const owner = parts[0];
+        const repo = parts[1];
+        const branch = parts[3];
+        const filePath = parts.slice(4).join('/');
+        candidates.push(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${filePath}`);
+      }
+    }
+  } catch {
+    return [...new Set(candidates)];
+  }
+
+  return [...new Set(candidates)];
+};
+
+const downloadMediaAsBlob = async (url, token) => {
   try {
     // Skip data URLs (already embedded)
     if (url.startsWith('data:')) return null;
@@ -414,14 +512,35 @@ const downloadMediaAsBlob = async (url) => {
       return null;
     }
     
-    const response = await fetch(url, {
-      mode: 'cors',
-      cache: 'default'
-    });
-    
-    if (!response.ok) return null;
+    const candidates = buildDownloadCandidates(url);
+    for (const candidate of candidates) {
+      try {
+        const parsedUrl = new URL(candidate);
+        const isGitHubApi = parsedUrl.hostname === 'api.github.com';
 
-    return await response.blob();
+        const response = await fetch(candidate, {
+          mode: 'cors',
+          cache: 'default',
+          headers: isGitHubApi && token
+            ? {
+                ...buildHeaders(token),
+                Accept: '*/*',
+              }
+            : undefined,
+        });
+
+        if (response.ok) {
+          const blob = await response.blob();
+          if (blob && blob.size > 0) {
+            return blob;
+          }
+        }
+      } catch {
+        // Continue to next candidate
+      }
+    }
+
+    return null;
   } catch (error) {
     // CORS or network error - return null
     console.warn(`Failed to download media: ${url}`, error);
@@ -440,7 +559,16 @@ const extractMediaUrls = (content, isHtml = false) => {
     // Extract from Markdown: ![alt](url)
     const imgRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
     while ((match = imgRegex.exec(content))) {
-      urls.push({ type: 'image', url: match[2], alt: match[1] });
+      urls.push({ type: 'image', url: normalizeMediaUrl(match[2]), alt: match[1] });
+    }
+
+    // Extract markdown links that point to media: [text](url)
+    const markdownLinkRegex = /\[([^\]]*)\]\(([^)]+)\)/g;
+    while ((match = markdownLinkRegex.exec(content))) {
+      const candidateUrl = normalizeMediaUrl(match[2]);
+      if (isLikelyMediaUrl(candidateUrl)) {
+        urls.push({ type: 'media', url: candidateUrl, alt: match[1] });
+      }
     }
   }
   
@@ -448,19 +576,28 @@ const extractMediaUrls = (content, isHtml = false) => {
   // Images: <img src="..." /> or <img src='...' />
   const imgSrcRegex = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
   while ((match = imgSrcRegex.exec(content))) {
-    urls.push({ type: 'image', url: match[1], alt: '' });
+    urls.push({ type: 'image', url: normalizeMediaUrl(match[1]), alt: '' });
   }
   
   // Videos: <video src="..." />
   const videoSrcRegex = /<video[^>]+src=["']([^"']+)["'][^>]*>/gi;
   while ((match = videoSrcRegex.exec(content))) {
-    urls.push({ type: 'video', url: match[1], alt: '' });
+    urls.push({ type: 'video', url: normalizeMediaUrl(match[1]), alt: '' });
   }
   
   // Source tags inside video: <source src="..." />
   const sourceSrcRegex = /<source[^>]+src=["']([^"']+)["'][^>]*>/gi;
   while ((match = sourceSrcRegex.exec(content))) {
-    urls.push({ type: 'video', url: match[1], alt: '' });
+    urls.push({ type: 'video', url: normalizeMediaUrl(match[1]), alt: '' });
+  }
+
+  // Links to media files or GitHub attachments: <a href="...">
+  const anchorHrefRegex = /<a[^>]+href=["']([^"']+)["'][^>]*>/gi;
+  while ((match = anchorHrefRegex.exec(content))) {
+    const href = normalizeMediaUrl(match[1]);
+    if (isLikelyMediaUrl(href)) {
+      urls.push({ type: 'media', url: href, alt: '' });
+    }
   }
   
   // srcset attributes (responsive images)
@@ -469,14 +606,20 @@ const extractMediaUrls = (content, isHtml = false) => {
     // srcset can have multiple URLs separated by commas with descriptors
     const srcsetUrls = match[1].split(',').map(s => s.trim().split(/\s+/)[0]);
     srcsetUrls.forEach(url => {
-      if (url) urls.push({ type: 'image', url, alt: '' });
+      if (url) urls.push({ type: 'image', url: normalizeMediaUrl(url), alt: '' });
     });
   }
   
   // Direct links to common image/video formats
-  const directMediaRegex = /https?:\/\/[^\s<>"]+\.(?:jpg|jpeg|png|gif|webp|svg|mp4|webm|mov|avi)/gi;
+  const directMediaRegex = /https?:\/\/[^\s<>"]+\.(?:jpg|jpeg|png|gif|webp|svg|mp4|webm|mov|avi)(?:[?#][^\s<>"]*)?/gi;
   while ((match = directMediaRegex.exec(content))) {
-    urls.push({ type: 'media', url: match[0], alt: '' });
+    urls.push({ type: 'media', url: normalizeMediaUrl(match[0]), alt: '' });
+  }
+
+  // GitHub user-attachment links that often do not include file extensions
+  const githubAttachmentRegex = /https?:\/\/github\.com\/user-attachments\/assets\/[a-z0-9-]+/gi;
+  while ((match = githubAttachmentRegex.exec(content))) {
+    urls.push({ type: 'media', url: normalizeMediaUrl(match[0]), alt: '' });
   }
 
   return urls;
@@ -491,6 +634,7 @@ const replaceMediaWithLocalPaths = async (content, mediaMap) => {
     if (localPath && url !== localPath) {
       // Use split/join to avoid regex escaping issues
       result = result.split(url).join(localPath);
+      result = result.split(url.replaceAll('&', '&amp;')).join(localPath);
     }
   }
 
@@ -723,6 +867,8 @@ const generateIndexHTML = (issues, owner, repo, filters) => {
     </div>
     
     <h2>Issue List</h2>
+    <p>Clicking on an issue's title will take you to a detailed view of the issue at the time it was exported, including its description and comments, all available offline.</p>
+    <p>In the event that any content within the issue does not load, or is inaccessible offline, contact whomever you sourced the export from for additional details.</p>
     <p><strong>${issues.length}</strong> issue(s) found</p>
     
     <table>
@@ -845,7 +991,7 @@ exportButton.addEventListener('click', async () => {
     const assetsFolder = zip.folder("assets");
     
     // Extract and download media
-    const uniqueUrls = await extractAndDownloadMedia(issuesWithComments, mediaMap, assetsFolder);
+    const mediaDownloadResults = await extractAndDownloadMedia(issuesWithComments, mediaMap, assetsFolder);
     
     // Replace media URLs with local paths
     await replaceMediaWithLocalPathsInIssues(issuesWithComments, mediaMap);
@@ -864,6 +1010,22 @@ exportButton.addEventListener('click', async () => {
       zip.file(`issue-${issue.number}.html`, html);
     });
 
+    const reportLines = [
+      'GitHub Issue Exporter - Media Download Report',
+      `Repository: ${currentOwner}/${currentRepo}`,
+      `Exported: ${new Date().toLocaleString()}`,
+      '',
+      `Media URLs discovered: ${mediaDownloadResults.uniqueUrls.length}`,
+      `Media assets downloaded: ${mediaDownloadResults.downloadedUrls.length}`,
+      `Media URLs failed: ${mediaDownloadResults.failedUrls.length}`,
+      '',
+      'Failed media URLs:',
+      ...(mediaDownloadResults.failedUrls.length
+        ? mediaDownloadResults.failedUrls.map((url) => `- ${url}`)
+        : ['- None'])
+    ];
+    zip.file('media-download-report.txt', reportLines.join('\n'));
+
     // Generate and download zip
     statusText.textContent = 'Creating archive...';
     const blob = await zip.generateAsync({ type: 'blob' });
@@ -874,7 +1036,7 @@ exportButton.addEventListener('click', async () => {
     link.click();
     URL.revokeObjectURL(link.href);
 
-    statusText.textContent = `Export complete! Downloaded ${issuesWithComments.length} issue(s) with ${uniqueUrls.length} media asset(s).`;
+    statusText.textContent = `Export complete! Downloaded ${issuesWithComments.length} issue(s), ${mediaDownloadResults.downloadedUrls.length} media asset(s), ${mediaDownloadResults.failedUrls.length} media URL(s) failed (see media-download-report.txt).`;
   } catch (error) {
     statusText.textContent = `Export failed: ${error.message}`;
   } finally {
@@ -942,18 +1104,27 @@ async function extractAndDownloadMedia(issues, mediaMap, assetsFolder) {
     });
   });
 
-  const uniqueUrls = [...new Set(allMedia.map((m) => m.url))]
+  const mediaTypeByUrl = {};
+  allMedia.forEach((item) => {
+    if (item.url && !mediaTypeByUrl[item.url]) {
+      mediaTypeByUrl[item.url] = item.type;
+    }
+  });
+
+  const uniqueUrls = [...new Set(allMedia.map((m) => normalizeMediaUrl(m.url)))]
     .filter(url => {
       if (!url || url.startsWith('data:')) return false;
       try { new URL(url); return true; } catch { return false; }
     });
     
   let downloadedCount = 0;
+  const downloadedUrls = [];
+  const failedUrls = [];
   for (const url of uniqueUrls) {
     downloadedCount++;
     statusText.textContent = `Downloading media ${downloadedCount}/${uniqueUrls.length}...`;
     
-    const blob = await downloadMediaAsBlob(url);
+    const blob = await downloadMediaAsBlob(url, currentToken);
     if (blob) {
       // determine extension
       let ext = 'bin';
@@ -961,11 +1132,21 @@ async function extractAndDownloadMedia(issues, mediaMap, assetsFolder) {
       if (type.includes('/')) {
         ext = type.split('/')[1].split(';')[0];
       }
+
+      if (ext === 'svg+xml') {
+        ext = 'svg';
+      }
       
       // fallback to url extension if available
       if (ext === 'bin' || ext === 'octet-stream') {
         const urlExt = url.split('.').pop().split('?')[0].split('#')[0];
         if (urlExt && urlExt.length < 5) ext = urlExt;
+      }
+
+      if (ext === 'bin' || ext === 'octet-stream') {
+        const mediaType = mediaTypeByUrl[url];
+        if (mediaType === 'image') ext = 'jpg';
+        if (mediaType === 'video') ext = 'mp4';
       }
 
       // Generate filename (simple counter or hash would be better but counter is enough here)
@@ -976,9 +1157,16 @@ async function extractAndDownloadMedia(issues, mediaMap, assetsFolder) {
       
       // Update map with relative path
       mediaMap[url] = `assets/${filename}`;
+      downloadedUrls.push(url);
+    } else {
+      failedUrls.push(url);
     }
   }
-  return uniqueUrls;
+  return {
+    uniqueUrls,
+    downloadedUrls,
+    failedUrls,
+  };
 }
 
 async function replaceMediaWithLocalPathsInIssues(issues, mediaMap) {
