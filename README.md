@@ -25,6 +25,7 @@ http://localhost:8080
 - GitHub access token (required)
 - Repository owner
 - Repository name
+- **State Filter**: Choose to search for open issues, closed issues, or all issues (defaults to all if not selected)
 - **Include Labels - ALL**: Issues must have ALL specified labels (AND logic)
 - **Include Labels - ANY**: Issues must have at least ONE of the specified labels (OR logic)
 - **Exclude Labels - ANY**: Issues with ANY of these labels will be excluded (OR logic)
@@ -47,7 +48,6 @@ If authentication fails (invalid/missing token) or the user lacks access to the 
 
 - ID
 - Title
-- Labels
 - Created Date
 - Labels on Issue
 - Issue URL

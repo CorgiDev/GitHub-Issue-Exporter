@@ -10,9 +10,14 @@
     <main class="container">
       <h1>GitHub Issue Exporter</h1>
 
+      <div>
+        <button type="button" id="signOutButton" class="secondary-button" aria-describedby="SignoutDescription">Sign out</button>
+        <div id="SignoutDescription">Sign out removes the stored GitHub access token from your local storage.</div>
+      </div>
+
       <form id="search-form" class="search-form">
         <label>
-          GitHub Access Token
+          GitHub Access Token (Required)<br>
           <input
             type="password"
             id="token"
@@ -24,35 +29,54 @@
         </label>
 
         <label>
-          Repository Owner
+          Repository Owner (Required)<br>
           <input type="text" id="owner" name="owner" placeholder="e.g., microsoft" required />
         </label>
 
         <label>
-          Repository Name
+          Repository Name (Required)<br>
           <input type="text" id="repo" name="repo" placeholder="e.g., vscode" required />
         </label>
 
-        <label for="includeLabelsAll">Include Labels - ALL (separated by commas)</label>
-        <span id="includeLabelsAllDescription">List labels that ALL must be on an issue.</span>
-        <input type="text" id="includeLabelsAll" name="includeLabelsAll" placeholder="bug,regression" />
+        <div id="stateFilterDiv">
+            <label for="stateFilter">State Filter (Defaults to Open issues)</label><br>
+            <select id="stateFilter" name="stateFilter">
+                <option value="open" selected>Open Issues</option>
+                <option value="closed">Closed Issues</option>
+            </select>
+        </div>
         
-
-        <label for="includeLabelsAny">Include Labels - ANY (separated by commas)</label>
-        <span id="includeLabelsAnyDescription">List labels where at least ONE of them must be on an issue.</span>
-        <input type="text" id="includeLabelsAny" name="includeLabelsAny" placeholder="help wanted,good first issue" />
-
-        <label for="excludeLabelsAll">Exclude Labels - ALL (separated by commas)</label>
-        <span id="excludeLabelsAllDescription">List labels that ALL must NOT be on an issue.</span>
-        <input type="text" id="excludeLabelsAll" name="excludeLabelsAll" placeholder="needs-info,stale" />
-
-        <label for="excludeLabelsAny">Exclude Labels - ANY (separated by commas)</label>
-        <span id="excludeLabelsAnyDescription">List labels where any ONE of them must NOT be on an issue.</span>
-        <input type="text" id="excludeLabelsAny" name="excludeLabelsAny" placeholder="duplicate,wontfix" />
+        <fieldset id="labelFiltersFields" aria-describedby="fieldsetDescriptor">
+            <legend>Label Filters</legend>
+            <span id="fieldsetDescriptor">Groups of labels should be separated by commas (e.g., a11y,Sev1), and labels are case sensitive.</span>
+            <div>
+                <label for="includeLabelsAll">Include Labels - ALL</label>
+                <span class="descriptionText" id="includeLabelsAllDescription">Filters for issues that have all of the specified labels.</span>
+                <br>
+                <input type="text" id="includeLabelsAll" name="includeLabelsAll" placeholder="bug,regression" />
+            </div>
+            <div>
+                <label for="includeLabelsAny">Include Labels - ANY</label>
+                <span class="descriptionText" id="includeLabelsAnyDescription">Filters for issues that have any of the specified labels.</span>
+                <br>
+                <input type="text" id="includeLabelsAny" name="includeLabelsAny" placeholder="help wanted,good first issue" />
+            </div>
+            <div>
+                <label for="excludeLabelsAll">Exclude Labels - ALL</label>
+                <span class="descriptionText" id="excludeLabelsAllDescription">Filters out issues that have all of the specified labels.</span>
+                <br>
+                <input type="text" id="excludeLabelsAll" name="excludeLabelsAll" placeholder="needs-info,stale" />
+            </div>
+            <div>
+                <label for="excludeLabelsAny">Exclude Labels - ANY</label>
+                <span class="descriptionText" id="excludeLabelsAnyDescription">Filters out issues that have any of the specified labels.</span>
+                <br>
+                <input type="text" id="excludeLabelsAny" name="excludeLabelsAny" placeholder="duplicate,wontfix" />
+            </div>
+        </fieldset>
 
         <div class="form-actions">
-          <button type="submit">Search Open Issues</button>
-          <button type="button" id="signOutButton" class="secondary-button">Sign out</button>
+          <button type="submit">Search Issues</button>
         </div>
       </form>
 
@@ -68,10 +92,9 @@
             <tr>
               <th>ID</th>
               <th>Title</th>
-              <th>Labels</th>
               <th>Created Date</th>
               <th>Labels on Issue</th>
-              <th>Issue URL</th>
+              <th>Issue's GitHub URL</th>
             </tr>
           </thead>
           <tbody id="results-body"></tbody>

@@ -10,6 +10,11 @@ let currentIssues = [];
 let currentToken = '';
 let currentOwner = '';
 let currentRepo = '';
+let currentStateFilter = 'open';
+let currentIncludeLabelsAll = [];
+let currentIncludeLabelsAny = [];
+let currentExcludeLabelsAny = [];
+let currentExcludeLabelsAll = [];
 
 const AUTH_ERROR_MESSAGE =
   'Results could not be fetched because the user is either not logged in or does not have sufficient privileges for the repo they wish to query.';
@@ -36,8 +41,9 @@ const escapeHtml = (value) =>
     .replaceAll("'", '&#039;');
 
 const buildHeaders = (token) => ({
-  Accept: 'application/vnd.github+json',
+  Accept: 'application/vnd.github.v3+json',
   Authorization: `Bearer ${token}`,
+  'X-GitHub-Api-Version': '2022-11-28',
 });
 
 const updateSignOutButtonState = () => {
@@ -54,34 +60,45 @@ const ensureAuthenticatedUser = async (token) => {
   }
 };
 
-const fetchAllOpenIssues = async (owner, repo, token) => {
+const fetchAllOpenIssues = async (owner, repo, token, state = 'open') => {
   const collected = [];
-  let page = 1;
+  const stateParam = state || 'open';
+  let url = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues?state=${encodeURIComponent(stateParam)}&per_page=100`;
 
-  while (true) {
-    const response = await fetch(
-      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues?state=open&per_page=100&page=${page}`,
-      {
-        headers: buildHeaders(token),
-      }
-    );
+  while (url) {
+    console.log('Fetching issues with URL:', url);
+    
+    const response = await fetch(url, {
+      headers: buildHeaders(token),
+    });
 
     if (!response.ok) {
+      const errorBody = await response.text();
+      console.error('GitHub API error:', response.status, errorBody);
+      
       if (response.status === 401 || response.status === 403 || response.status === 404) {
         throw new Error(AUTH_ERROR_MESSAGE);
       }
-      throw new Error(`GitHub API error: ${response.status}`);
+      throw new Error(`GitHub API error: ${response.status} - ${errorBody}`);
     }
 
     const data = await response.json();
     const issuesOnly = data.filter((item) => !item.pull_request);
     collected.push(...issuesOnly);
 
-    if (data.length < 100) {
-      break;
+    // Handle pagination using Link header
+    const linkHeader = response.headers.get('link');
+    if (linkHeader) {
+      const nextLink = linkHeader.split(',').find(s => s.includes('rel="next"'));
+      if (nextLink) {
+        const match = nextLink.match(/<([^>]+)>/);
+        url = match ? match[1] : null;
+      } else {
+        url = null;
+      }
+    } else {
+      url = null;
     }
-
-    page += 1;
   }
 
   return collected;
@@ -120,7 +137,6 @@ const renderRows = (issues) => {
   resultsBody.innerHTML = issues
     .map((issue) => {
       const labels = issue.labels.map((label) => label.name);
-      const labelsText = labels.length ? labels.join(', ') : 'None';
       const labelChips = labels.length
         ? labels
             .map((labelName) => `<span class="label-chip">${escapeHtml(labelName)}</span>`)
@@ -131,10 +147,9 @@ const renderRows = (issues) => {
         <tr>
           <td>${issue.number}</td>
           <td>${escapeHtml(issue.title)}</td>
-          <td>${escapeHtml(labelsText)}</td>
           <td>${formatDate(issue.created_at)}</td>
           <td><div class="label-list">${labelChips}</div></td>
-          <td><a href="${issue.html_url}" target="_blank" rel="noopener noreferrer">Open Issue</a></td>
+          <td><a href="${issue.html_url}" target="_blank" rel="noopener noreferrer">Open Issue #${issue.number}</a></td>
         </tr>
       `;
     })
@@ -149,6 +164,8 @@ form.addEventListener('submit', async (event) => {
   const token = form.token.value.trim();
   const owner = form.owner.value.trim();
   const repo = form.repo.value.trim();
+  const stateFilter = form.stateFilter.value || 'open';
+  console.log('Form submitted with state filter:', stateFilter, 'type:', typeof stateFilter);
   const includeLabelsAll = parseLabels(form.includeLabelsAll.value);
   const includeLabelsAny = parseLabels(form.includeLabelsAny.value);
   const excludeLabelsAny = parseLabels(form.excludeLabelsAny.value);
@@ -156,7 +173,7 @@ form.addEventListener('submit', async (event) => {
 
   const submitButton = form.querySelector('button[type="submit"]');
 
-  statusText.textContent = 'Loading open issues...';
+  statusText.textContent = `Loading ${stateFilter} issues...`;
   submitButton.disabled = true;
   resultsTable.hidden = true;
 
@@ -165,16 +182,22 @@ form.addEventListener('submit', async (event) => {
     localStorage.setItem('githubIssueExporterToken', token);
     updateSignOutButtonState();
 
-    const openIssues = await fetchAllOpenIssues(owner, repo, token);
+    const openIssues = await fetchAllOpenIssues(owner, repo, token, stateFilter);
     const filteredIssues = filterByLabels(openIssues, includeLabelsAll, includeLabelsAny, excludeLabelsAny, excludeLabelsAll);
 
     currentIssues = filteredIssues;
     currentToken = token;
     currentOwner = owner;
     currentRepo = repo;
+    currentStateFilter = stateFilter;
+    currentIncludeLabelsAll = includeLabelsAll;
+    currentIncludeLabelsAny = includeLabelsAny;
+    currentExcludeLabelsAny = excludeLabelsAny;
+    currentExcludeLabelsAll = excludeLabelsAll;
 
     renderRows(filteredIssues);
-    statusText.textContent = `Found ${filteredIssues.length} open issue(s).`;
+    const stateLabel = stateFilter + ' ';
+    statusText.textContent = `Found ${filteredIssues.length} ${stateLabel}issue(s).`;
     exportSection.hidden = filteredIssues.length === 0;
   } catch (error) {
     resultsBody.innerHTML = '';
@@ -512,11 +535,10 @@ pre code {
 }
 `;
 
-const generateIndexHTML = (issues, owner, repo) => {
+const generateIndexHTML = (issues, owner, repo, filters) => {
   const issuesRows = issues
     .map((issue) => {
       const labels = issue.labels.map((label) => label.name);
-      const labelsText = labels.length ? labels.join(', ') : 'None';
       const labelChips = labels.length
         ? labels.map((labelName) => `<span class="label-chip">${escapeHtml(labelName)}</span>`).join('')
         : '<span>None</span>';
@@ -525,7 +547,6 @@ const generateIndexHTML = (issues, owner, repo) => {
         <tr>
           <td>${issue.number}</td>
           <td><a href="issue-${issue.number}.html">${escapeHtml(issue.title)}</a></td>
-          <td>${escapeHtml(labelsText)}</td>
           <td>${formatDate(issue.created_at)}</td>
           <td><div class="label-list">${labelChips}</div></td>
           <td><a href="${issue.html_url}" target="_blank" rel="noopener">Original Issue</a></td>
@@ -533,6 +554,14 @@ const generateIndexHTML = (issues, owner, repo) => {
       `;
     })
     .join('');
+
+  const filterItems = [
+    `<li><strong>State Filter:</strong> ${escapeHtml(filters.state)}</li>`,
+    filters.includeAll.length ? `<li><strong>Include All Labels:</strong> ${filters.includeAll.map(l => `<span class="label-chip">${escapeHtml(l)}</span>`).join(' ')}</li>` : '',
+    filters.includeAny.length ? `<li><strong>Include Any Labels:</strong> ${filters.includeAny.map(l => `<span class="label-chip">${escapeHtml(l)}</span>`).join(' ')}</li>` : '',
+    filters.excludeAny.length ? `<li><strong>Exclude Any Labels:</strong> ${filters.excludeAny.map(l => `<span class="label-chip">${escapeHtml(l)}</span>`).join(' ')}</li>` : '',
+    filters.excludeAll.length ? `<li><strong>Exclude All Labels:</strong> ${filters.excludeAll.map(l => `<span class="label-chip">${escapeHtml(l)}</span>`).join(' ')}</li>` : ''
+  ].filter(Boolean).join('');
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -546,6 +575,15 @@ const generateIndexHTML = (issues, owner, repo) => {
   <div class="container">
     <h1>GitHub Issues: ${escapeHtml(owner)}/${escapeHtml(repo)}</h1>
     <p>Exported on ${new Date().toLocaleString()}</p>
+    
+    <div class="issue-filters">
+      <h2>Issue Filters Applied</h2>
+      <ul>
+        ${filterItems}
+      </ul>
+    </div>
+    
+    <h2>Issue List</h2>
     <p><strong>${issues.length}</strong> issue(s) found</p>
     
     <table>
@@ -553,10 +591,9 @@ const generateIndexHTML = (issues, owner, repo) => {
         <tr>
           <th>ID</th>
           <th>Title</th>
-          <th>Labels</th>
           <th>Created Date</th>
           <th>Labels on Issue</th>
-          <th>Original URL</th>
+          <th>Original GitHub URL</th>
         </tr>
       </thead>
       <tbody>
@@ -661,117 +698,25 @@ exportButton.addEventListener('click', async () => {
     const mediaMap = {};
 
     // Fetch full issue details with HTML bodies
-    statusText.textContent = `Fetching details for ${currentIssues.length} issue(s)...`;
-
-    const detailedIssues = await Promise.all(
-      currentIssues.map(async (issue) => {
-        const response = await fetch(
-          `https://api.github.com/repos/${encodeURIComponent(currentOwner)}/${encodeURIComponent(currentRepo)}/issues/${issue.number}`,
-          {
-            headers: {
-              ...buildHeaders(currentToken),
-              Accept: 'application/vnd.github.html+json',
-            },
-          }
-        );
-
-        if (!response.ok) return issue;
-        return await response.json();
-      })
-    );
-
-    // Fetch comments for each issue
-    statusText.textContent = 'Fetching comments...';
-    const issuesWithComments = await Promise.all(
-      detailedIssues.map(async (issue) => {
-        const comments = await fetchIssueComments(currentOwner, currentRepo, issue.number, currentToken);
-
-        // Fetch HTML version of comments
-        const commentsWithHtml = await Promise.all(
-          comments.map(async (comment) => {
-            const response = await fetch(comment.url, {
-              headers: {
-                ...buildHeaders(currentToken),
-                Accept: 'application/vnd.github.html+json',
-              },
-            });
-
-            if (!response.ok) return comment;
-            return await response.json();
-          })
-        );
-
-        return { ...issue, comments: commentsWithHtml };
-      })
-    );
-
+    const issuesWithComments = await fetchIssuesWithDetails();
+    
     // Extract and download media
-    statusText.textContent = 'Downloading media assets...';
-    const allMedia = [];
-
-    issuesWithComments.forEach((issue) => {
-      // Extract from markdown body
-      if (issue.body) {
-        allMedia.push(...extractMediaUrls(issue.body, false));
-      }
-      // Extract from HTML-rendered body
-      if (issue.body_html) {
-        allMedia.push(...extractMediaUrls(issue.body_html, true));
-      }
-      
-      // Extract from comments
-      issue.comments.forEach((comment) => {
-        if (comment.body) {
-          allMedia.push(...extractMediaUrls(comment.body, false));
-        }
-        if (comment.body_html) {
-          allMedia.push(...extractMediaUrls(comment.body_html, true));
-        }
-      });
-    });
-
-    const uniqueUrls = [...new Set(allMedia.map((m) => m.url))]
-      .filter(url => {
-        // Filter out data URLs (already embedded) and invalid URLs
-        if (!url || url.startsWith('data:')) return false;
-        try {
-          new URL(url);
-          return true;
-        } catch {
-          return false;
-        }
-      });
-      
-    let downloadedCount = 0;
-    let successCount = 0;
-
-    for (const url of uniqueUrls) {
-      downloadedCount++;
-      statusText.textContent = `Downloading media ${downloadedCount}/${uniqueUrls.length}...`;
-      const dataUrl = await downloadAsDataUrl(url);
-      if (dataUrl) {
-        mediaMap[url] = dataUrl;
-        successCount++;
-      }
-    }
-
+    const uniqueUrls = await extractAndDownloadMedia(issuesWithComments, mediaMap);
+    
     // Replace media URLs with data URLs
-    for (const issue of issuesWithComments) {
-      if (issue.body_html) {
-        issue.body_html = await replaceMediaWithDataUrls(issue.body_html, mediaMap);
-      }
-      for (const comment of issue.comments) {
-        if (comment.body_html) {
-          comment.body_html = await replaceMediaWithDataUrls(comment.body_html, mediaMap);
-        }
-      }
-    }
+    await replaceMediaWithDataUrlsInIssues(issuesWithComments, mediaMap);
 
     // Generate files
     statusText.textContent = 'Generating HTML files...';
 
     zip.file('styles.css', generateOfflineSiteCSS());
-    zip.file('index.html', generateIndexHTML(issuesWithComments, currentOwner, currentRepo));
+    zip.file('index.html', generateIndexHTML(issuesWithComments, currentOwner, currentRepo, {
+      state: currentStateFilter,
+      includeAll: currentIncludeLabelsAll,
+      includeAny: currentIncludeLabelsAny,
+      excludeAny: currentExcludeLabelsAny,
+      excludeAll: currentExcludeLabelsAll
+    }));
 
     issuesWithComments.forEach((issue) => {
       const html = generateIssueHTML(issue, issue.comments, currentOwner, currentRepo);
@@ -788,10 +733,101 @@ exportButton.addEventListener('click', async () => {
     link.click();
     URL.revokeObjectURL(link.href);
 
-    statusText.textContent = `Export complete! Downloaded ${issuesWithComments.length} issue(s) with ${successCount}/${uniqueUrls.length} media asset(s).`;
+    statusText.textContent = `Export complete! Downloaded ${issuesWithComments.length} issue(s) with ${uniqueUrls.length} media asset(s).`;
   } catch (error) {
     statusText.textContent = `Export failed: ${error.message}`;
   } finally {
     exportButton.disabled = false;
   }
 });
+
+// Helper functions for exports
+async function fetchIssuesWithDetails() {
+  statusText.textContent = `Fetching details for ${currentIssues.length} issue(s)...`;
+
+  const detailedIssues = await Promise.all(
+    currentIssues.map(async (issue) => {
+      const response = await fetch(
+        `https://api.github.com/repos/${encodeURIComponent(currentOwner)}/${encodeURIComponent(currentRepo)}/issues/${issue.number}`,
+        {
+          headers: {
+            ...buildHeaders(currentToken),
+            Accept: 'application/vnd.github.html+json',
+          },
+        }
+      );
+
+      if (!response.ok) return issue;
+      return await response.json();
+    })
+  );
+
+  statusText.textContent = 'Fetching comments...';
+  return await Promise.all(
+    detailedIssues.map(async (issue) => {
+      const comments = await fetchIssueComments(currentOwner, currentRepo, issue.number, currentToken);
+
+      // Fetch HTML version of comments
+      const commentsWithHtml = await Promise.all(
+        comments.map(async (comment) => {
+          const response = await fetch(comment.url, {
+            headers: {
+              ...buildHeaders(currentToken),
+              Accept: 'application/vnd.github.html+json',
+            },
+          });
+
+          if (!response.ok) return comment;
+          return await response.json();
+        })
+      );
+
+      return { ...issue, comments: commentsWithHtml };
+    })
+  );
+}
+
+async function extractAndDownloadMedia(issues, mediaMap) {
+  statusText.textContent = 'Downloading media assets...';
+  const allMedia = [];
+
+  issues.forEach((issue) => {
+    if (issue.body) allMedia.push(...extractMediaUrls(issue.body, false));
+    if (issue.body_html) allMedia.push(...extractMediaUrls(issue.body_html, true));
+    
+    issue.comments.forEach((comment) => {
+      if (comment.body) allMedia.push(...extractMediaUrls(comment.body, false));
+      if (comment.body_html) allMedia.push(...extractMediaUrls(comment.body_html, true));
+    });
+  });
+
+  const uniqueUrls = [...new Set(allMedia.map((m) => m.url))]
+    .filter(url => {
+      if (!url || url.startsWith('data:')) return false;
+      try { new URL(url); return true; } catch { return false; }
+    });
+    
+  let downloadedCount = 0;
+  for (const url of uniqueUrls) {
+    downloadedCount++;
+    statusText.textContent = `Downloading media ${downloadedCount}/${uniqueUrls.length}...`;
+    const dataUrl = await downloadAsDataUrl(url);
+    if (dataUrl) {
+      mediaMap[url] = dataUrl;
+    }
+  }
+  return uniqueUrls;
+}
+
+async function replaceMediaWithDataUrlsInIssues(issues, mediaMap) {
+  for (const issue of issues) {
+    if (issue.body_html) {
+      issue.body_html = await replaceMediaWithDataUrls(issue.body_html, mediaMap);
+    }
+    for (const comment of issue.comments) {
+      if (comment.body_html) {
+        comment.body_html = await replaceMediaWithDataUrls(comment.body_html, mediaMap);
+      }
+    }
+  }
+}
