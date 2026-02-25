@@ -409,7 +409,7 @@ h1 {
 .label-chip {
   border-radius: 999px;
   background: #ddf4ff;
-  border: 1px solid #54aeff;
+  border: 1px solid #1e3a8a;
   color: #0969da;
   font-size: 0.85rem;
   padding: 0.2rem 0.6rem;
