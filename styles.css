@@ -33,7 +33,7 @@ h1 {
   border: 1px solid #e5e7eb;
 }
 
-label {
+label, legend {
   display: grid;
   gap: 0.5rem;
   font-weight: 600;
