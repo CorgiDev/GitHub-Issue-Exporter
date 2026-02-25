@@ -173,8 +173,13 @@ fieldset {
     grid-column-end:span 3;
 }
 
-fieldset, fieldset div {
-    padding: 10px;
+fieldset div {
+    padding: 5px;
+}
+
+fieldset li {
+    margin-top: 3px;
+    margin-bottom: 3px;
 }
 
 .descriptionText {
@@ -195,5 +200,9 @@ kbd {
     background:#c3c3c3;
     color: black;
     border-radius: 4px;
-    padding: 2px 4px;
+    padding: 1px 2px;
+}
+
+.filter-input {
+  margin-bottom: 5px;
 }

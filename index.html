@@ -10,33 +10,41 @@
     <main class="container">
       <h1>GitHub Issue Exporter</h1>
       <p>Created with ❤️ by CorgiDev and Copilot Chat in VSCode. Check it out!</p>
-      <div>
-        <button type="button" id="signOutButton" class="secondary-button" aria-describedby="SignoutDescription">Sign out</button>
-        <div id="SignoutDescription">Sign out removes the stored GitHub access token from your local storage.</div>
-      </div>
-
+      
       <form id="search-form" class="search-form">
-        <label>
-          GitHub Access Token (Required)<br>
-          <input
-            type="password"
-            id="token"
-            name="token"
-            placeholder="ghp_..."
-            autocomplete="off"
-            required
-          />
-        </label>
+        <fieldset>
+            <legend>GitHub Repository Information</legend>
+            <p class="descriptionText">To get started, please provide the following information about the GitHub repository you want to export issues from. You will also need to provide a GitHub Access Token with the necessary permissions to read the repository's issues.</p>
+            <label>
+                GitHub Access Token (Required)<br>
+                <input
+                type="password"
+                id="token"
+                name="token"
+                placeholder="ghp_..."
+                autocomplete="off"
+                required
+                />
+            </label>
+            <br>
 
-        <label>
-          Repository Owner (Required)<br>
-          <input type="text" id="owner" name="owner" placeholder="e.g., microsoft" required />
-        </label>
+            <label>
+                Repository Owner (Required)<br>
+                <input type="text" id="owner" name="owner" placeholder="e.g., microsoft" required />
+            </label>
+            <br>
 
-        <label>
-          Repository Name (Required)<br>
-          <input type="text" id="repo" name="repo" placeholder="e.g., vscode" required />
-        </label>
+            <label>
+                Repository Name (Required)<br>
+                <input type="text" id="repo" name="repo" placeholder="e.g., vscode" required/>
+            </label>
+            <br>
+
+            <div id="signOutDiv">
+                <button type="button" id="signOutButton" class="secondary-button" aria-describedby="SignoutDescription">Sign out</button>
+                <div id="SignoutDescription">Using the Sign Out button removes the stored GitHub access token used by this app, if you have added one, from your local storage.</div>
+            </div>
+        </fieldset>
 
         <div id="stateFilterDiv">
             <label for="stateFilter">State Filter (Defaults to Open issues)</label><br>
@@ -48,12 +56,13 @@
         
         <fieldset id="labelFiltersFields" aria-describedby="fieldsetDescriptor">
             <legend>Label Filters</legend>
-            <span id="fieldsetDescriptor">
+            <div id="fieldsetDescriptor" class="descriptionText">
                 <ul>
+                    <li>You must have entered a GitHub Access Token, Repository Owner, and Repository Name to use the label filters.</li>
                     <li>Use the "Load Repo Labels" button to populate the label options for the following fields.</li>
                     <li>Select multiple labels by holding <kbd>Ctrl</kbd> (Windows) or <kbd>Cmd</kbd> (Mac).</li>
                 </ul>
-            </span>
+            </div>
             <div id="loadLabelsButtonDiv">
                 <button type="button" id="fetchLabelsButton" class="secondary-button">Load Repo Labels</button>
                 <span id="labelFetchStatus" class="status-small"></span>
@@ -62,24 +71,28 @@
                 <label for="includeLabelsAll">Include Labels - ALL</label>
                 <span class="descriptionText" id="includeLabelsAllDescription">Filters for issues that have all of the selected labels.</span>
                 <br>
+                <input type="text" class="filter-input" placeholder="Type to filter..." aria-label="Filter Include All Labels" data-target="includeLabelsAll">
                 <select id="includeLabelsAll" name="includeLabelsAll" multiple size="5" class="label-select"></select>
             </div>
             <div>
                 <label for="includeLabelsAny">Include Labels - ANY</label>
                 <span class="descriptionText" id="includeLabelsAnyDescription">Filters for issues that have any of the selected labels.</span>
                 <br>
+                <input type="text" class="filter-input" placeholder="Type to filter..." aria-label="Filter Include Any Labels" data-target="includeLabelsAny">
                 <select id="includeLabelsAny" name="includeLabelsAny" multiple size="5" class="label-select"></select>
             </div>
             <div>
                 <label for="excludeLabelsAll">Exclude Labels - ALL</label>
                 <span class="descriptionText" id="excludeLabelsAllDescription">Filters out issues that have all of the selected labels.</span>
                 <br>
+                <input type="text" class="filter-input" placeholder="Type to filter..." aria-label="Filter Exclude All Labels" data-target="excludeLabelsAll">
                 <select id="excludeLabelsAll" name="excludeLabelsAll" multiple size="5" class="label-select"></select>
             </div>
             <div>
                 <label for="excludeLabelsAny">Exclude Labels - ANY</label>
                 <span class="descriptionText" id="excludeLabelsAnyDescription">Filters out issues that have any of the selected labels.</span>
                 <br>
+                <input type="text" class="filter-input" placeholder="Type to filter..." aria-label="Filter Exclude Any Labels" data-target="excludeLabelsAny">
                 <select id="excludeLabelsAny" name="excludeLabelsAny" multiple size="5" class="label-select"></select>
             </div>
         </fieldset>

@@ -8,6 +8,9 @@ const exportButton = document.getElementById('exportButton');
 const fetchLabelsButton = document.getElementById('fetchLabelsButton');
 const labelSelects = document.querySelectorAll('.label-select');
 const labelFetchStatus = document.getElementById('labelFetchStatus');
+const filterInputs = document.querySelectorAll('.filter-input');
+
+let allRepoLabels = [];
 
 let currentIssues = [];
 let currentToken = '';
@@ -192,6 +195,70 @@ const fetchRepoLabels = async (owner, repo, token) => {
   return labels.sort((a,b) => a.name.localeCompare(b.name));
 };
 
+
+const updateLabelDropdowns = (labels, searchTerm = '', targetSelectId = null) => {
+  if (targetSelectId) {
+    const select = document.getElementById(targetSelectId);
+    if (select) {
+        renderFilteredOptions(select, labels, searchTerm);
+    }
+  } else {
+    // Initial load: update all selects
+    labelSelects.forEach(select => {
+        renderFilteredOptions(select, labels, '');
+    });
+  }
+};
+
+const renderFilteredOptions = (select, labels, searchTerm) => {
+    // 1. Capture current selection (values)
+    const currentSelectedValues = new Set(Array.from(select.selectedOptions).map(o => o.value));
+
+    // 2. Clear options
+    select.innerHTML = '';
+    
+    // 3. Filter labels
+    const normalizedTerm = searchTerm.toLowerCase();
+    const filteredLabels = labels.filter(l => l.name.toLowerCase().includes(normalizedTerm));
+    const visibleNames = new Set(filteredLabels.map(l => l.name));
+
+    // 4. Render matching labels
+    filteredLabels.forEach(label => {
+        const option = createLabelOption(label);
+        if (currentSelectedValues.has(label.name)) {
+            option.selected = true;
+        }
+        select.appendChild(option);
+    });
+
+    // 5. If we have a filter active, ensure SELECTED items that are hidden get added back
+    if (normalizedTerm) {
+        const hiddenSelected = labels.filter(l => currentSelectedValues.has(l.name) && !visibleNames.has(l.name));
+        
+        if (hiddenSelected.length > 0) {
+            const separator = document.createElement('option');
+            separator.textContent = '--- Selected (Hidden by filter) ---';
+            separator.disabled = true;
+            select.appendChild(separator);
+            
+            hiddenSelected.forEach(label => {
+                const option = createLabelOption(label);
+                option.selected = true;
+                select.appendChild(option);
+            });
+        }
+    }
+};
+
+const createLabelOption = (label) => {
+    const option = document.createElement('option');
+    option.value = label.name;
+    option.textContent = label.name;
+    option.style.borderLeft = `5px solid #${label.color}`;
+    option.style.paddingLeft = '5px';
+    return option;
+};
+
 fetchLabelsButton.addEventListener('click', async () => {
   const token = form.token.value.trim();
   const owner = form.owner.value.trim();
@@ -207,26 +274,13 @@ fetchLabelsButton.addEventListener('click', async () => {
   
   try {
     const labels = await fetchRepoLabels(owner, repo, token);
+    allRepoLabels = labels; // Store for filtering
+    
+    // Reset all filters
+    filterInputs.forEach(input => input.value = '');
     
     labelSelects.forEach(select => {
-      // Keep existing selection if any? No, clear is safer.
-      const currentlySelected = Array.from(select.selectedOptions).map(o => o.value);
-      select.innerHTML = '';
-      
-      labels.forEach(label => {
-        const option = document.createElement('option');
-        option.value = label.name;
-        option.textContent = label.name;
-        // visual hint for label color
-        option.style.borderLeft = `5px solid #${label.color}`;
-        option.style.paddingLeft = '5px';
-        
-        if (currentlySelected.includes(label.name)) {
-            option.selected = true;
-        }
-        
-        select.appendChild(option);
-      });
+        renderFilteredOptions(select, labels, '');
     });
     
     labelFetchStatus.textContent = `Loaded ${labels.length} labels.`;
@@ -237,6 +291,17 @@ fetchLabelsButton.addEventListener('click', async () => {
   } finally {
     fetchLabelsButton.disabled = false;
   }
+});
+
+// Add event listeners for filter inputs
+filterInputs.forEach(input => {
+    input.addEventListener('input', (e) => {
+        const searchTerm = e.target.value;
+        const targetSelectId = e.target.getAttribute('data-target');
+        if (allRepoLabels.length > 0) {
+            updateLabelDropdowns(allRepoLabels, searchTerm, targetSelectId);
+        }
+    });
 });
 
 form.addEventListener('submit', async (event) => {
