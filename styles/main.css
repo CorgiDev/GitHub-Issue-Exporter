@@ -98,24 +98,13 @@ button:disabled,button[aria-disabled="true"] {
   cursor: wait;
 }
 
-.loadLabelsButtonDiv {
-    margin-bottom: 1rem;
+#loadLabelsButtonDiv {
+  margin-bottom: 1rem;
 }
 
 .status {
   min-height: 1.5rem;
   margin: 1rem 0;
-}
-
-.export-section {
-  margin: 1rem 0;
-  text-align: center;
-}
-
-#export-section {
-  display: flex;
-  gap: 1rem;
-  justify-content: center;
 }
 
 .table-wrap {
@@ -184,7 +173,7 @@ fieldset li {
     color: #6f6e6e;
 }
 
-.stateFilterDiv {
+#stateFilterDiv {
     width: 100%;
 }
 
@@ -202,4 +191,18 @@ kbd {
 
 .filter-input {
   margin-bottom: 5px;
+}
+
+/* Export Section */
+
+#export-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  justify-content: center;
+  align-items: center;
+}
+
+.fullRow {
+  grid-row: span 1;
 }

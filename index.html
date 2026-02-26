@@ -105,7 +105,8 @@
       <p id="status" class="status" role="status" aria-live="polite"></p>
 
       <div id="export-section" class="export-section" hidden>
-        <button type="button" id="exportButton" class="export-button">Export Results as Offline HTML</button>
+        <button type="button" id="exportButton" class="export-button fullRow" aria-describedby="exportBugMessage">Export Results as Offline HTML</button>
+        <p id="exportBugMessage" class="fullRow">Currently, when you export results, images and videos will not be included. However, the file names and a message mentioning there would have been on present still displays. This issue is due to browser/site cross origin restrictions, and should be corrected in a future update.</p>
       </div>
 
       <div class="table-wrap">
