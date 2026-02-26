@@ -650,7 +650,7 @@ const replaceFailedMediaWithMessage = async (content, failedUrls) => {
   if (!content || !failedUrls || failedUrls.length === 0) return content;
 
   let result = content;
-  const fallbackDiv = `<span style="border: 3px solid #000; background-color: #e9b833; color: #000; padding: 0.75rem; margin: 0.75rem 0;">${escapeHtml(failedMediaFallbackMessage)}</span>`;
+  const fallbackDiv = `<div style="border: 3px solid #000; background-color: #e9b833; color: #000; padding: 0.75rem; margin: 0.75rem 0;">${escapeHtml(failedMediaFallbackMessage)}</div>`;
 
   for (const originalUrl of failedUrls) {
     const normalizedUrl = normalizeMediaUrl(originalUrl);
