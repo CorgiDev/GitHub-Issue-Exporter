@@ -58,9 +58,9 @@ select[multiple] {
     margin-left: 10px;
     font-weight: 600;
 }
-.status-success { color: #059669; }
-.status-error { color: #dc2626; }
-.loading { color: #2563eb; }
+.status-success { color: #047A56; }
+.status-error { color: #A11C1C; }
+.loading { color: #18429C; }
 
 option {
     padding: 4px 8px;
