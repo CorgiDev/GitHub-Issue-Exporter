@@ -41,8 +41,8 @@
             <br>
 
             <div id="signOutDiv">
-                <button type="button" id="signOutButton" class="secondary-button" aria-describedby="SignoutDescription">Sign out</button>
-                <div id="SignoutDescription">Using the Sign Out button removes the stored GitHub access token used by this app, if you have added one, from your local storage.</div>
+                <button type="button" id="signOutButton" class="secondary-button" aria-describedby="SignoutDescription">Remove Token</button>
+                <div id="SignoutDescription">Using the Remove Token button removes the GitHub access token used by this app from your local storage, if you added one.</div>
             </div>
         </fieldset>
 
@@ -68,32 +68,36 @@
                 <span id="labelFetchStatus" class="status-small"></span>
             </div>
             <div>
-                <label for="includeLabelsAll">Include Labels - ALL</label>
+                <label for="includeLabelsAll" id="includeAllLabel">Include Labels - ALL</label>
                 <span class="descriptionText" id="includeLabelsAllDescription">Filters for issues that have all of the selected labels.</span>
                 <br>
                 <input type="text" class="filter-input" placeholder="Type to filter..." aria-label="Filter Include All Labels" data-target="includeLabelsAll">
                 <select id="includeLabelsAll" name="includeLabelsAll" multiple size="5" class="label-select"></select>
+              <button type="button" class="secondary-button clear-label-button" data-target="includeLabelsAll" aria-describedby="includeAllLabel">Clear selected labels</button>
             </div>
             <div>
-                <label for="includeLabelsAny">Include Labels - ANY</label>
+                <label for="includeLabelsAny" id="includeAnyLabel">Include Labels - ANY</label>
                 <span class="descriptionText" id="includeLabelsAnyDescription">Filters for issues that have any of the selected labels.</span>
                 <br>
                 <input type="text" class="filter-input" placeholder="Type to filter..." aria-label="Filter Include Any Labels" data-target="includeLabelsAny">
                 <select id="includeLabelsAny" name="includeLabelsAny" multiple size="5" class="label-select"></select>
+              <button type="button" class="secondary-button clear-label-button" data-target="includeLabelsAny"  aria-describedby="includeAnyLabel">Clear selected labels</button>
             </div>
             <div>
-                <label for="excludeLabelsAll">Exclude Labels - ALL</label>
+                <label for="excludeLabelsAll" id="excludeAllLabel">Exclude Labels - ALL</label>
                 <span class="descriptionText" id="excludeLabelsAllDescription">Filters out issues that have all of the selected labels.</span>
                 <br>
                 <input type="text" class="filter-input" placeholder="Type to filter..." aria-label="Filter Exclude All Labels" data-target="excludeLabelsAll">
                 <select id="excludeLabelsAll" name="excludeLabelsAll" multiple size="5" class="label-select"></select>
+              <button type="button" class="secondary-button clear-label-button" data-target="excludeLabelsAll" aria-describedby="excludeAllLabel">Clear selected labels</button>
             </div>
             <div>
-                <label for="excludeLabelsAny">Exclude Labels - ANY</label>
+                <label for="excludeLabelsAny" id="excludeAnyLabel">Exclude Labels - ANY</label>
                 <span class="descriptionText" id="excludeLabelsAnyDescription">Filters out issues that have any of the selected labels.</span>
                 <br>
                 <input type="text" class="filter-input" placeholder="Type to filter..." aria-label="Filter Exclude Any Labels" data-target="excludeLabelsAny">
                 <select id="excludeLabelsAny" name="excludeLabelsAny" multiple size="5" class="label-select"></select>
+              <button type="button" class="secondary-button clear-label-button" data-target="excludeLabelsAny" aria-describedby="excludeAnyLabel">Clear selected labels</button>
             </div>
         </fieldset>
 

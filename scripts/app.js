@@ -7,6 +7,7 @@ const exportSection = document.getElementById('export-section');
 const exportButton = document.getElementById('exportButton');
 const fetchLabelsButton = document.getElementById('fetchLabelsButton');
 const labelSelects = document.querySelectorAll('.label-select');
+const clearLabelButtons = document.querySelectorAll('.clear-label-button');
 const labelFetchStatus = document.getElementById('labelFetchStatus');
 const filterInputs = document.querySelectorAll('.filter-input');
 
@@ -309,6 +310,37 @@ filterInputs.forEach(input => {
             updateLabelDropdowns(allRepoLabels, searchTerm, targetSelectId);
         }
     });
+});
+
+clearLabelButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    const targetSelectId = button.getAttribute('data-target');
+    const select = document.getElementById(targetSelectId);
+    if (!select) return;
+
+    Array.from(select.options).forEach((option) => {
+      option.selected = false;
+    });
+
+    if (allRepoLabels.length > 0) {
+      const filterInput = document.querySelector(`.filter-input[data-target="${targetSelectId}"]`);
+      const searchTerm = filterInput ? filterInput.value : '';
+      updateLabelDropdowns(allRepoLabels, searchTerm, targetSelectId);
+    }
+  });
+});
+
+labelSelects.forEach((select) => {
+  select.addEventListener('mousedown', (event) => {
+    const option = event.target;
+    if (!(option instanceof HTMLOptionElement)) return;
+
+    if (event.ctrlKey || event.metaKey || event.shiftKey) return;
+
+    event.preventDefault();
+    option.selected = !option.selected;
+    select.focus();
+  });
 });
 
 form.addEventListener('submit', async (event) => {

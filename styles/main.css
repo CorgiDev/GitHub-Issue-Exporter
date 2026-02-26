@@ -193,6 +193,13 @@ kbd {
   margin-bottom: 5px;
 }
 
+.clear-label-button {
+  margin-top: 0.5rem;
+  width: auto;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.9rem;
+}
+
 /* Export Section */
 
 #export-section {
