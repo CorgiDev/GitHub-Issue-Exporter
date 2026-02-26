@@ -641,6 +641,36 @@ const replaceMediaWithLocalPaths = async (content, mediaMap) => {
   return result;
 };
 
+const failedMediaFallbackMessage =
+  'Media files failed to be fetched. Contact the person who provided you with this file if you need screenshots or screen recordings for added issue context.';
+
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const replaceFailedMediaWithMessage = async (content, failedUrls) => {
+  if (!content || !failedUrls || failedUrls.length === 0) return content;
+
+  let result = content;
+  const fallbackDiv = `<span style="border: 3px solid #000; background-color: #e9b833; color: #000; padding: 0.75rem; margin: 0.75rem 0;">${escapeHtml(failedMediaFallbackMessage)}</span>`;
+
+  for (const originalUrl of failedUrls) {
+    const normalizedUrl = normalizeMediaUrl(originalUrl);
+    if (!normalizedUrl) continue;
+
+    const urlVariants = [normalizedUrl, normalizedUrl.replaceAll('&', '&amp;')];
+
+    for (const urlVariant of urlVariants) {
+      const escapedUrl = escapeRegex(urlVariant);
+
+      result = result.replace(new RegExp(`<img[^>]*src=["']${escapedUrl}["'][^>]*>`, 'gi'), fallbackDiv);
+      result = result.replace(new RegExp(`<video[^>]*src=["']${escapedUrl}["'][^>]*>[\\s\\S]*?<\\/video>`, 'gi'), fallbackDiv);
+      result = result.replace(new RegExp(`<source[^>]*src=["']${escapedUrl}["'][^>]*>`, 'gi'), fallbackDiv);
+      result = result.replace(new RegExp(`<a[^>]*href=["']${escapedUrl}["'][^>]*>[\\s\\S]*?<\\/a>`, 'gi'), fallbackDiv);
+    }
+  }
+
+  return result;
+};
+
 const generateOfflineSiteCSS = () => `
 :root {
   font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif;
@@ -994,7 +1024,7 @@ exportButton.addEventListener('click', async () => {
     const mediaDownloadResults = await extractAndDownloadMedia(issuesWithComments, mediaMap, assetsFolder);
     
     // Replace media URLs with local paths
-    await replaceMediaWithLocalPathsInIssues(issuesWithComments, mediaMap);
+    await replaceMediaWithLocalPathsInIssues(issuesWithComments, mediaMap, mediaDownloadResults.failedUrls);
 
     zip.file('styles.css', generateOfflineSiteCSS());
     zip.file('index.html', generateIndexHTML(issuesWithComments, currentOwner, currentRepo, {
@@ -1169,14 +1199,16 @@ async function extractAndDownloadMedia(issues, mediaMap, assetsFolder) {
   };
 }
 
-async function replaceMediaWithLocalPathsInIssues(issues, mediaMap) {
+async function replaceMediaWithLocalPathsInIssues(issues, mediaMap, failedUrls = []) {
   for (const issue of issues) {
     if (issue.body_html) {
       issue.body_html = await replaceMediaWithLocalPaths(issue.body_html, mediaMap);
+      issue.body_html = await replaceFailedMediaWithMessage(issue.body_html, failedUrls);
     }
     for (const comment of issue.comments) {
       if (comment.body_html) {
         comment.body_html = await replaceMediaWithLocalPaths(comment.body_html, mediaMap);
+        comment.body_html = await replaceFailedMediaWithMessage(comment.body_html, failedUrls);
       }
     }
   }
