@@ -3,16 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>GitHub Issue Exporter</title>
+    <title>GitHub Issue Tools</title>
     <link rel="stylesheet" href="styles/main.css" />
   </head>
   <body>
     <main class="container">
-      <h1>GitHub Issue Exporter</h1>
+      <h1>GitHub Issue Tools</h1>
       <p>Created with ❤️ by CorgiDev and Copilot Chat in VSCode. Check it out!</p>
-      
+
       <form id="search-form" class="search-form">
-        <fieldset>
+        <fieldset id="githubRepoInfo">
             <legend>GitHub Repository Information</legend>
             <p class="descriptionText">To get started, please provide the following information about the GitHub repository you want to export issues from. You will also need to provide a GitHub Access Token with the necessary permissions to read the repository's issues.</p>
             <label>
@@ -127,6 +127,21 @@
           </thead>
           <tbody id="results-body"></tbody>
         </table>
+
+        <section>
+          <h2 id="githubIssueImportHeading">GitHub Issue Importer</h2>
+          <p>This feature allows you to import GitHub issues into another GitHub Repo. You will need to provide your GitHub access token in the <a href="#githubRepoInfo">GitHub Repository Information fields</a> near the top of this page.</p>
+          <form aria-labelledby="githubIssueImportHeading">
+            <!-- TODO: Pull access token from GitHub Repository Information section of this page. -->
+            <!-- TODO: User provides the issues URL for the target repo (e.g., https://github.com/repos/owner/repo/issues) -->
+            <!-- TODO: User selects the folder containing the issues and assets they want to import using a file dialog. The issues will be in the format that is exported by the export feature on this page. -->
+            <!-- TODO: User clicks the "Import Issues to Target Repo" button. -->
+            <!-- TODO: User receives confirmation if the issues are successfully imported, or if they fail to. -->
+            <!-- TODO: Display a report of whether the target repo was able to be connected to, total issues user attempted to import,how many issues were successfully imported, how many issues failed to import, total number of image and video assets the user attempted to import, how many images / videos successfully imported, how many images / videos failed to import, and any browser success / failure messages. -->
+            <!-- TODO: Warn the user if they attempt to import issues without providing any required information, including the access token. -->
+
+          </form>
+        </section>
       </div>
     </main>
 
