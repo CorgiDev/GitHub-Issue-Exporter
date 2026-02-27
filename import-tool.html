@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GitHub Issue Importer</title>
+    <link rel="stylesheet" href="styles/main.css" />
+  </head>
+  <body>
+    <main class="container">      
+      <section id="importIssueSection" aria-labelledby="githubIssueImportHeading">
+        <h1 id="githubIssueImportHeading">GitHub Issue Importer</h1>
+        <p>This tool is meant to help you import issues you exported with this app from one repo into another repo.</p>
+        <form id="importIssuesForm" aria-labelledby="githubIssueImportHeading" novalidate>
+          <fieldset aria-describedby="importIssuesDescription">
+            <legend>Import Configuration</legend>
+            <p id="importIssuesDescription" class="descriptionText">Provide a dedicated GitHub token for import access, the target GitHub Issues API URL, and the exported issue files to import.</p>
+
+            <label for="importToken">
+              GitHub Access Token for Import (Required)<br>
+              <input
+                type="password"
+                id="importToken"
+                name="importToken"
+                placeholder="ghp_..."
+                autocomplete="off"
+                required
+                aria-describedby="importTokenHelp"
+              />
+            </label>
+            <p id="importTokenHelp" class="descriptionText">Use a token with read/write access to issues for the destination repository.</p>
+            <div id="importSignOutDiv">
+              <button type="button" id="importSignOutButton" class="secondary-button" aria-describedby="importSignOutDescription">Remove Import Token</button>
+              <div id="importSignOutDescription" class="descriptionText">Removes the import token stored by this app from local storage.</div>
+            </div>
+
+            <label for="targetIssuesApiUrl">
+              Target Repository Issues API URL (Required)<br>
+              <input
+                type="url"
+                id="targetIssuesApiUrl"
+                name="targetIssuesApiUrl"
+                placeholder="https://api.github.com/repos/owner/repo/issues"
+                required
+                aria-describedby="targetIssuesApiUrlHelp"
+              />
+            </label>
+            <p id="targetIssuesApiUrlHelp" class="descriptionText">Use the GitHub REST API issues endpoint (https://api.github.com/repos/owner/repo/issues) for the destination repository.</p>
+
+            <label for="importSourceFolder">
+              Exported Issues Folder (Required)<br>
+              <input
+                type="file"
+                id="importSourceFolder"
+                name="importSourceFolder"
+                webkitdirectory
+                directory
+                multiple
+                required
+                aria-describedby="importSourceFolderHelp"
+              />
+            </label>
+            <p id="importSourceFolderHelp" class="descriptionText">Select the extracted export folder that contains issue files and any assets directory.</p>
+
+            <label for="importSpeed">
+              Import Speed<br>
+              <select id="importSpeed" name="importSpeed" aria-describedby="importSpeedHelp">
+                <option value="slow">Slow (best for large imports)</option>
+                <option value="normal" selected>Normal (recommended)</option>
+                <option value="fast">Fast (higher risk of rate limiting)</option>
+              </select>
+            </label>
+            <p id="importSpeedHelp" class="descriptionText">Controls the delay between issue creation requests and retry aggressiveness. Slow recommended for imports of 80 or more.</p>
+
+            <div class="form-actions">
+              <button type="submit" id="importIssuesButton">Import Issues to Target Repo</button>
+            </div>
+
+            <p id="importValidationWarning" class="status status-error" role="alert" aria-live="assertive" hidden>Missing required information. Add an import token, a valid target issues URL, and an export folder before importing.</p>
+            <p id="importStatus" class="status" role="status" aria-live="polite"></p>
+          </fieldset>
+
+          <fieldset id="importReport" aria-describedby="importReportDescription" hidden>
+            <legend>Import Report</legend>
+            <p id="importReportDescription" class="descriptionText">This summary is populated after an import attempt.</p>
+            <div class="form-actions">
+              <button type="button" id="downloadImportReportButton" class="secondary-button" disabled>Download Import Report</button>
+            </div>
+            <ul>
+              <li>Target repo connection: <strong id="reportTargetRepoConnection">Not attempted</strong></li>
+              <li>Total issues attempted: <strong id="reportIssuesAttempted">0</strong></li>
+              <li>Issues imported successfully: <strong id="reportIssuesSucceeded">0</strong></li>
+              <li>Issues failed to import: <strong id="reportIssuesFailed">0</strong></li>
+              <li>Total media assets attempted: <strong id="reportMediaAttempted">0</strong></li>
+              <li>Media assets imported successfully: <strong id="reportMediaSucceeded">0</strong></li>
+              <li>Media assets failed to import: <strong id="reportMediaFailed">0</strong></li>
+            </ul>
+            <label for="importBrowserMessages">Import Success/Failure Messages</label>
+            <textarea id="importBrowserMessages" name="importBrowserMessages" rows="6" readonly placeholder="Import messages will appear here."></textarea>
+          </fieldset>
+        </form>
+      </section>
+    </main>
+
+    <footer>
+        <p>Created with ❤️ by CorgiDev and Copilot Chat in VSCode!</p>
+    </footer>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="scripts/app.js"></script>
+  </body>
+</html>
