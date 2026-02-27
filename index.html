@@ -11,6 +11,7 @@
       <h1>GitHub Issue Tools</h1>
       <p>Created with ❤️ by CorgiDev and Copilot Chat in VSCode. Check it out!</p>
 
+      <section></section>
       <form id="search-form" class="search-form">
         <fieldset id="githubRepoInfo">
             <legend>GitHub Repository Information</legend>
@@ -41,8 +42,8 @@
             <br>
 
             <div id="signOutDiv">
-                <button type="button" id="signOutButton" class="secondary-button" aria-describedby="SignoutDescription">Remove Token</button>
-                <div id="SignoutDescription">Using the Remove Token button removes the GitHub access token used by this app from your local storage, if you added one.</div>
+                <button type="button" id="signOutButton" class="secondary-button" aria-describedby="SignoutDescription">Remove Query/Export Token</button>
+                <div id="SignoutDescription">Using the Remove Query/Export Token button removes the GitHub access token used by this app from your local storage, if you added one.</div>
             </div>
         </fieldset>
 
@@ -107,42 +108,123 @@
         </div>
       </form>
 
-      <p id="status" class="status" role="status" aria-live="polite"></p>
+      <section aria-label="Search Results">
+        <h2>Search Results</h2>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
 
-      <div id="export-section" class="export-section" hidden>
-        <button type="button" id="exportButton" class="export-button fullRow" aria-describedby="exportBugMessage">Export Results as Offline HTML</button>
-        <p id="exportBugMessage" class="fullRow">Currently, when you export results to a set of offline HTML files, images and videos will not be included. However, the file names and a message mentioning there would have been media present still displays. This issue is due to browser/site cross origin restrictions (CORs), and should be corrected in a future update.</p>
-      </div>
+        <div id="export-section" class="export-section" hidden>
+          <button type="button" id="exportButton" class="export-button fullRow" aria-describedby="exportBugMessage">Export Results as Offline HTML</button>
+          <p id="exportBugMessage" class="fullRow">Currently, when you export results, images and videos will not be included. However, the file names and a message mentioning there would have been media present still displays. This issue is due to browser/site cross origin restrictions (CORs), and should be corrected in a future update.</p>
+        </div>
 
-      <div class="table-wrap">
-        <table id="results-table" hidden>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Title</th>
-              <th>Created Date</th>
-              <th>Labels on Issue</th>
-              <th>Issue's GitHub URL</th>
-            </tr>
-          </thead>
-          <tbody id="results-body"></tbody>
-        </table>
+        <div class="table-wrap">
+          <table id="results-table" hidden>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Title</th>
+                <th>Created Date</th>
+                <th>Labels on Issue</th>
+                <th>Issue's GitHub URL</th>
+              </tr>
+            </thead>
+            <tbody id="results-body"></tbody>
+          </table>
+        </div>
+      </section>
 
-        <section>
-          <h2 id="githubIssueImportHeading">GitHub Issue Importer</h2>
-          <p>This feature allows you to import GitHub issues into another GitHub Repo. You will need to provide your GitHub access token in the <a href="#githubRepoInfo">GitHub Repository Information fields</a> near the top of this page.</p>
-          <form aria-labelledby="githubIssueImportHeading">
-            <!-- TODO: Pull access token from GitHub Repository Information section of this page. -->
-            <!-- TODO: User provides the issues URL for the target repo (e.g., https://github.com/repos/owner/repo/issues) -->
-            <!-- TODO: User selects the folder containing the issues and assets they want to import using a file dialog. The issues will be in the format that is exported by the export feature on this page. -->
-            <!-- TODO: User clicks the "Import Issues to Target Repo" button. -->
-            <!-- TODO: User receives confirmation if the issues are successfully imported, or if they fail to. -->
-            <!-- TODO: Display a report of whether the target repo was able to be connected to, total issues user attempted to import,how many issues were successfully imported, how many issues failed to import, total number of image and video assets the user attempted to import, how many images / videos successfully imported, how many images / videos failed to import, and any browser success / failure messages. -->
-            <!-- TODO: Warn the user if they attempt to import issues without providing any required information, including the access token. -->
+      <section id="importIssueSection" aria-labelledby="githubIssueImportHeading">
+        <h2 id="githubIssueImportHeading">GitHub Issue Importer</h2>
+        <p>This feature allows you to import GitHub issues that were exported from repo using this app into another Repo. You will need to provide an access token for this feature. It will need to be a different token than the one used for the export unless both are under the same owner and the token has read/write access to the issues of both.</p>
+        <form id="importIssuesForm" aria-labelledby="githubIssueImportHeading" novalidate>
+          <fieldset aria-describedby="importIssuesDescription">
+            <legend>Import Configuration</legend>
+            <p id="importIssuesDescription" class="descriptionText">Provide a dedicated GitHub token for import access, the target GitHub Issues API URL, and the exported issue files to import.</p>
 
-          </form>
-        </section>
-      </div>
+            <label for="importToken">
+              GitHub Access Token for Import (Required)<br>
+              <input
+                type="password"
+                id="importToken"
+                name="importToken"
+                placeholder="ghp_..."
+                autocomplete="off"
+                required
+                aria-describedby="importTokenHelp"
+              />
+            </label>
+            <p id="importTokenHelp" class="descriptionText">Use a token with read/write access to issues for the destination repository.</p>
+            <div id="importSignOutDiv">
+              <button type="button" id="importSignOutButton" class="secondary-button" aria-describedby="importSignOutDescription">Remove Import Token</button>
+              <div id="importSignOutDescription" class="descriptionText">Removes the import token stored by this app from local storage.</div>
+            </div>
+
+            <label for="targetIssuesApiUrl">
+              Target Repository Issues API URL (Required)<br>
+              <input
+                type="url"
+                id="targetIssuesApiUrl"
+                name="targetIssuesApiUrl"
+                placeholder="https://api.github.com/repos/owner/repo/issues"
+                required
+                aria-describedby="targetIssuesApiUrlHelp"
+              />
+            </label>
+            <p id="targetIssuesApiUrlHelp" class="descriptionText">Use the GitHub REST API issues endpoint (https://api.github.com/repos/owner/repo/issues) for the destination repository.</p>
+
+            <label for="importSourceFolder">
+              Exported Issues Folder (Required)<br>
+              <input
+                type="file"
+                id="importSourceFolder"
+                name="importSourceFolder"
+                webkitdirectory
+                directory
+                multiple
+                required
+                aria-describedby="importSourceFolderHelp"
+              />
+            </label>
+            <p id="importSourceFolderHelp" class="descriptionText">Select the extracted export folder that contains issue files and any assets directory.</p>
+
+            <label for="importSpeed">
+              Import Speed<br>
+              <select id="importSpeed" name="importSpeed" aria-describedby="importSpeedHelp">
+                <option value="slow">Slow (best for large imports)</option>
+                <option value="normal" selected>Normal (recommended)</option>
+                <option value="fast">Fast (higher risk of rate limiting)</option>
+              </select>
+            </label>
+            <p id="importSpeedHelp" class="descriptionText">Controls the delay between issue creation requests and retry aggressiveness. Slow recommended for imports of 80 or more.</p>
+
+            <div class="form-actions">
+              <button type="submit" id="importIssuesButton">Import Issues to Target Repo</button>
+            </div>
+
+            <p id="importValidationWarning" class="status status-error" role="alert" aria-live="assertive" hidden>Missing required information. Add an import token, a valid target issues URL, and an export folder before importing.</p>
+            <p id="importStatus" class="status" role="status" aria-live="polite"></p>
+          </fieldset>
+
+          <fieldset id="importReport" aria-describedby="importReportDescription" hidden>
+            <legend>Import Report</legend>
+            <p id="importReportDescription" class="descriptionText">This summary is populated after an import attempt.</p>
+            <div class="form-actions">
+              <button type="button" id="downloadImportReportButton" class="secondary-button" disabled>Download Import Report</button>
+            </div>
+            <ul>
+              <li>Target repo connection: <strong id="reportTargetRepoConnection">Not attempted</strong></li>
+              <li>Total issues attempted: <strong id="reportIssuesAttempted">0</strong></li>
+              <li>Issues imported successfully: <strong id="reportIssuesSucceeded">0</strong></li>
+              <li>Issues failed to import: <strong id="reportIssuesFailed">0</strong></li>
+              <li>Total media assets attempted: <strong id="reportMediaAttempted">0</strong></li>
+              <li>Media assets imported successfully: <strong id="reportMediaSucceeded">0</strong></li>
+              <li>Media assets failed to import: <strong id="reportMediaFailed">0</strong></li>
+            </ul>
+            <label for="importBrowserMessages">Import Success/Failure Messages</label>
+            <textarea id="importBrowserMessages" name="importBrowserMessages" rows="6" readonly placeholder="Import messages will appear here."></textarea>
+          </fieldset>
+        </form>
+      </section>
     </main>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>

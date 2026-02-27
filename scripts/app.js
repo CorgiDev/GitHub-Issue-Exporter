@@ -10,6 +10,28 @@ const labelSelects = document.querySelectorAll('.label-select');
 const clearLabelButtons = document.querySelectorAll('.clear-label-button');
 const labelFetchStatus = document.getElementById('labelFetchStatus');
 const filterInputs = document.querySelectorAll('.filter-input');
+const importIssuesForm = document.getElementById('importIssuesForm');
+const importTokenInput = document.getElementById('importToken');
+const importSignOutButton = document.getElementById('importSignOutButton');
+const targetIssuesApiUrlInput = document.getElementById('targetIssuesApiUrl');
+const importSourceFolderInput = document.getElementById('importSourceFolder');
+const importSpeedSelect = document.getElementById('importSpeed');
+const importIssuesButton = document.getElementById('importIssuesButton');
+const importValidationWarning = document.getElementById('importValidationWarning');
+const importStatus = document.getElementById('importStatus');
+const importReport = document.getElementById('importReport');
+const importBrowserMessages = document.getElementById('importBrowserMessages');
+const downloadImportReportButton = document.getElementById('downloadImportReportButton');
+
+const reportTargetRepoConnection = document.getElementById('reportTargetRepoConnection');
+const reportIssuesAttempted = document.getElementById('reportIssuesAttempted');
+const reportIssuesSucceeded = document.getElementById('reportIssuesSucceeded');
+const reportIssuesFailed = document.getElementById('reportIssuesFailed');
+const reportMediaAttempted = document.getElementById('reportMediaAttempted');
+const reportMediaSucceeded = document.getElementById('reportMediaSucceeded');
+const reportMediaFailed = document.getElementById('reportMediaFailed');
+
+let latestImportReport = null;
 
 let allRepoLabels = [];
 
@@ -25,6 +47,27 @@ let currentExcludeLabelsAll = [];
 
 const AUTH_ERROR_MESSAGE =
   'Results could not be fetched because the user is either not logged in or does not have sufficient privileges for the repo they wish to query.';
+
+const IMPORT_TOKEN_STORAGE_KEY = 'githubIssueImporterToken';
+const IMPORT_SPEED_STORAGE_KEY = 'githubIssueImporterSpeed';
+const DEFAULT_IMPORT_SPEED = 'normal';
+const IMPORT_SPEED_CONFIG = {
+  slow: {
+    label: 'Slow',
+    requestDelayMs: 2500,
+    maxRetryAttempts: 8,
+  },
+  normal: {
+    label: 'Normal',
+    requestDelayMs: 1200,
+    maxRetryAttempts: 6,
+  },
+  fast: {
+    label: 'Fast',
+    requestDelayMs: 500,
+    maxRetryAttempts: 4,
+  },
+};
 
 const parseLabels = (inputElement) => {
   if (!inputElement) return [];
@@ -62,6 +105,11 @@ const buildHeaders = (token) => ({
 
 const updateSignOutButtonState = () => {
   signOutButton.disabled = !form.token.value.trim();
+};
+
+const updateImportSignOutButtonState = () => {
+  if (!importSignOutButton || !importTokenInput) return;
+  importSignOutButton.disabled = !importTokenInput.value.trim();
 };
 
 const updateFetchLabelsButtonState = () => {
@@ -1248,4 +1296,512 @@ async function replaceMediaWithLocalPathsInIssues(issues, mediaMap, failedUrls =
       }
     }
   }
+}
+
+const parseIssueNumberFromFileName = (fileName) => {
+  const match = fileName.match(/^issue-(\d+)\.html$/i);
+  return match ? Number(match[1]) : null;
+};
+
+const isIssueFile = (file) => parseIssueNumberFromFileName(file.name) !== null;
+
+const isLikelyMediaAssetFile = (fileName) => /\.(jpg|jpeg|png|gif|webp|svg|mp4|webm|mov|avi)$/i.test(fileName);
+
+const normalizeIssuesApiUrl = (value) => {
+  const parsed = new URL(value);
+  parsed.search = '';
+  parsed.hash = '';
+  parsed.pathname = parsed.pathname.replace(/\/+$/, '');
+  return parsed.toString();
+};
+
+const extractIssueTitle = (doc) => {
+  const heading = doc.querySelector('h1')?.textContent?.trim() || '';
+  if (heading) {
+    const withoutNumberPrefix = heading.replace(/^#\d+\s*:\s*/, '').trim();
+    if (withoutNumberPrefix) return withoutNumberPrefix;
+  }
+
+  const titleTag = doc.querySelector('title')?.textContent?.trim() || '';
+  if (titleTag) {
+    const cleanedTitle = titleTag.replace(/^Issue\s*#\d+\s*:\s*/i, '').trim();
+    if (cleanedTitle) return cleanedTitle;
+  }
+
+  return 'Imported issue';
+};
+
+const extractIssueLabels = (doc) =>
+  Array.from(doc.querySelectorAll('.label-list .label-chip'))
+    .map((node) => node.textContent?.trim())
+    .filter(Boolean);
+
+const extractIssueBodyText = (doc) => {
+  const issueBodyNode = doc.querySelector('.issue-body');
+  const issueBodyText = issueBodyNode?.textContent?.trim() || 'Imported from GitHub Issue Exporter.';
+
+  const commentNodes = Array.from(doc.querySelectorAll('.comment'));
+  const commentsText = commentNodes
+    .map((commentNode) => {
+      const header = commentNode.querySelector('.comment-header')?.textContent?.trim() || 'Comment';
+      const body = commentNode.querySelector('.comment-body')?.textContent?.trim() || '';
+      if (!body) return '';
+      return `### ${header}\n\n${body}`;
+    })
+    .filter(Boolean)
+    .join('\n\n---\n\n');
+
+  if (!commentsText) {
+    return issueBodyText;
+  }
+
+  return `${issueBodyText}\n\n---\n\n## Imported comments snapshot\n\n${commentsText}`;
+};
+
+const extractMediaReferencesFromIssue = (doc) => {
+  const relevantNodes = doc.querySelectorAll('.issue-body, .comment-body');
+  const refs = new Set();
+
+  relevantNodes.forEach((container) => {
+    container.querySelectorAll('img[src], source[src], video[src], a[href]').forEach((node) => {
+      const value = node.getAttribute('src') || node.getAttribute('href') || '';
+      const normalizedValue = value.trim();
+      if (!normalizedValue) return;
+      if (normalizedValue.startsWith('assets/') || normalizedValue.includes('/assets/')) {
+        refs.add(normalizedValue);
+      }
+    });
+  });
+
+  return [...refs];
+};
+
+const parseIssueHtmlFile = async (file) => {
+  const content = await file.text();
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(content, 'text/html');
+
+  return {
+    sourceIssueNumber: parseIssueNumberFromFileName(file.name),
+    sourceFileName: file.name,
+    title: extractIssueTitle(doc),
+    body: extractIssueBodyText(doc),
+    labels: extractIssueLabels(doc),
+    mediaReferences: extractMediaReferencesFromIssue(doc),
+  };
+};
+
+const setImportStatus = (message, statusClass = '') => {
+  if (!importStatus) return;
+  importStatus.textContent = message;
+  importStatus.className = ['status', statusClass].filter(Boolean).join(' ');
+};
+
+const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+const formatDuration = (totalMilliseconds) => {
+  const totalSeconds = Math.max(0, Math.ceil(totalMilliseconds / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}m ${String(seconds).padStart(2, '0')}s`;
+};
+
+const parseRetryAfterMilliseconds = (responseHeaders) => {
+  const retryAfter = responseHeaders.get('retry-after');
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    if (!Number.isNaN(seconds) && seconds > 0) {
+      return seconds * 1000;
+    }
+  }
+
+  const resetEpochSeconds = Number(responseHeaders.get('x-ratelimit-reset'));
+  if (!Number.isNaN(resetEpochSeconds) && resetEpochSeconds > 0) {
+    const waitMilliseconds = (resetEpochSeconds * 1000) - Date.now() + 1000;
+    if (waitMilliseconds > 0) {
+      return waitMilliseconds;
+    }
+  }
+
+  return 0;
+};
+
+const calculateRetryDelayMilliseconds = (response, errorBodyText, attempt) => {
+  const lowerBody = (errorBodyText || '').toLowerCase();
+  const isSecondaryRateLimit =
+    response.status === 403 && (lowerBody.includes('secondary rate limit') || lowerBody.includes('temporarily blocked from content creation'));
+  const isPrimaryRateLimit = response.status === 429;
+
+  if (!isSecondaryRateLimit && !isPrimaryRateLimit) {
+    return 0;
+  }
+
+  const headerDelay = parseRetryAfterMilliseconds(response.headers);
+  if (headerDelay > 0) {
+    return headerDelay;
+  }
+
+  const exponentialFallback = 5000 * (2 ** (attempt - 1));
+  return Math.min(exponentialFallback, 120000);
+};
+
+const getImportSpeedConfig = (selectedSpeed) => {
+  if (selectedSpeed && IMPORT_SPEED_CONFIG[selectedSpeed]) {
+    return {
+      speed: selectedSpeed,
+      ...IMPORT_SPEED_CONFIG[selectedSpeed],
+    };
+  }
+
+  return {
+    speed: DEFAULT_IMPORT_SPEED,
+    ...IMPORT_SPEED_CONFIG[DEFAULT_IMPORT_SPEED],
+  };
+};
+
+const updateImportReport = ({
+  importSpeed = DEFAULT_IMPORT_SPEED,
+  repoConnection = 'Not attempted',
+  issuesAttempted = 0,
+  issuesSucceeded = 0,
+  issuesFailed = 0,
+  mediaAttempted = 0,
+  mediaSucceeded = 0,
+  mediaFailed = 0,
+  messages = [],
+} = {}) => {
+  if (!importReport) return;
+
+  importReport.hidden = false;
+  reportTargetRepoConnection.textContent = repoConnection;
+  reportIssuesAttempted.textContent = String(issuesAttempted);
+  reportIssuesSucceeded.textContent = String(issuesSucceeded);
+  reportIssuesFailed.textContent = String(issuesFailed);
+  reportMediaAttempted.textContent = String(mediaAttempted);
+  reportMediaSucceeded.textContent = String(mediaSucceeded);
+  reportMediaFailed.textContent = String(mediaFailed);
+  importBrowserMessages.value = messages.join('\n');
+
+  latestImportReport = {
+    generatedAt: new Date().toISOString(),
+    targetIssuesApiUrl: targetIssuesApiUrlInput?.value?.trim() || '',
+    importSpeed,
+    repoConnection,
+    issuesAttempted,
+    issuesSucceeded,
+    issuesFailed,
+    mediaAttempted,
+    mediaSucceeded,
+    mediaFailed,
+    messages,
+  };
+
+  if (downloadImportReportButton) {
+    downloadImportReportButton.disabled = false;
+  }
+};
+
+const generateImportReportText = (report) => {
+  if (!report) return '';
+
+  return [
+    'GitHub Issue Importer - Import Report',
+    `Generated: ${new Date(report.generatedAt).toLocaleString()}`,
+    `Target Issues API URL: ${report.targetIssuesApiUrl || 'Not provided'}`,
+    `Import speed: ${report.importSpeed || DEFAULT_IMPORT_SPEED}`,
+    '',
+    `Target repo connection: ${report.repoConnection}`,
+    `Total issues attempted: ${report.issuesAttempted}`,
+    `Issues imported successfully: ${report.issuesSucceeded}`,
+    `Issues failed to import: ${report.issuesFailed}`,
+    `Total media assets attempted: ${report.mediaAttempted}`,
+    `Media assets imported successfully: ${report.mediaSucceeded}`,
+    `Media assets failed to import: ${report.mediaFailed}`,
+    '',
+    'Import Success/Failure Messages:',
+    ...(report.messages.length ? report.messages : ['(none)']),
+    '',
+  ].join('\n');
+};
+
+const downloadImportReport = (report) => {
+  if (!report) return;
+
+  const content = generateImportReportText(report);
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const downloadUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = downloadUrl;
+  link.download = `import-report-${Date.now()}.txt`;
+  link.click();
+  URL.revokeObjectURL(downloadUrl);
+};
+
+const validateImportRequest = () => {
+  const token = importTokenInput?.value?.trim() || '';
+  const targetUrl = targetIssuesApiUrlInput?.value?.trim() || '';
+  const files = Array.from(importSourceFolderInput?.files || []);
+  const importSpeed = importSpeedSelect?.value || DEFAULT_IMPORT_SPEED;
+
+  if (!token || !targetUrl || files.length === 0) {
+    return {
+      isValid: false,
+      message: 'Missing required information. Add an import token, a valid target issues URL, and an export folder before importing.',
+      token,
+      targetUrl,
+      files,
+      importSpeed,
+    };
+  }
+
+  try {
+    const normalizedTargetUrl = normalizeIssuesApiUrl(targetUrl);
+    return {
+      isValid: true,
+      token,
+      targetUrl: normalizedTargetUrl,
+      files,
+      importSpeed,
+    };
+  } catch {
+    return {
+      isValid: false,
+      message: 'Target repository Issues API URL must be a valid URL.',
+      token,
+      targetUrl,
+      files,
+      importSpeed,
+    };
+  }
+};
+
+const verifyTargetIssuesEndpoint = async (targetUrl, token) => {
+  const verifyUrl = `${targetUrl}${targetUrl.includes('?') ? '&' : '?'}per_page=1`;
+  const response = await fetch(verifyUrl, {
+    method: 'GET',
+    headers: buildHeaders(token),
+  });
+
+  if (!response.ok) {
+    const bodyText = await response.text();
+    throw new Error(`Target repository connection failed (${response.status}): ${bodyText || 'Unknown error'}`);
+  }
+};
+
+const createIssueInTargetRepo = async (targetUrl, token, issuePayload, importSpeedConfig, onRetry) => {
+  for (let attempt = 1; attempt <= importSpeedConfig.maxRetryAttempts; attempt += 1) {
+    const response = await fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        ...buildHeaders(token),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(issuePayload),
+    });
+
+    if (response.ok) {
+      return await response.json();
+    }
+
+    const bodyText = await response.text();
+    const waitMilliseconds = calculateRetryDelayMilliseconds(response, bodyText, attempt);
+
+    if (waitMilliseconds > 0 && attempt < importSpeedConfig.maxRetryAttempts) {
+      if (onRetry) {
+        onRetry({
+          attempt,
+          maxAttempts: importSpeedConfig.maxRetryAttempts,
+          waitMilliseconds,
+          status: response.status,
+          bodyText,
+        });
+      }
+      await sleep(waitMilliseconds);
+      continue;
+    }
+
+    throw new Error(`Issue create failed (${response.status}): ${bodyText || 'Unknown error'}`);
+  }
+
+  throw new Error('Issue create failed after retries.');
+};
+
+if (importIssuesForm) {
+  const storedImportToken = localStorage.getItem(IMPORT_TOKEN_STORAGE_KEY);
+  if (storedImportToken && importTokenInput) {
+    importTokenInput.value = storedImportToken;
+  }
+  updateImportSignOutButtonState();
+
+  if (importSpeedSelect) {
+    const storedImportSpeed = localStorage.getItem(IMPORT_SPEED_STORAGE_KEY);
+    const initialSpeed = IMPORT_SPEED_CONFIG[storedImportSpeed] ? storedImportSpeed : DEFAULT_IMPORT_SPEED;
+    importSpeedSelect.value = initialSpeed;
+
+    importSpeedSelect.addEventListener('change', () => {
+      const selectedSpeed = IMPORT_SPEED_CONFIG[importSpeedSelect.value] ? importSpeedSelect.value : DEFAULT_IMPORT_SPEED;
+      importSpeedSelect.value = selectedSpeed;
+      localStorage.setItem(IMPORT_SPEED_STORAGE_KEY, selectedSpeed);
+    });
+  }
+
+  if (importTokenInput) {
+    importTokenInput.addEventListener('input', () => {
+      localStorage.setItem(IMPORT_TOKEN_STORAGE_KEY, importTokenInput.value.trim());
+      updateImportSignOutButtonState();
+    });
+  }
+
+  if (importSignOutButton) {
+    importSignOutButton.addEventListener('click', () => {
+      localStorage.removeItem(IMPORT_TOKEN_STORAGE_KEY);
+      if (importTokenInput) {
+        importTokenInput.value = '';
+      }
+      updateImportSignOutButtonState();
+      setImportStatus('Import token removed. Enter a token to import issues.', '');
+    });
+  }
+
+  if (downloadImportReportButton) {
+    downloadImportReportButton.disabled = true;
+    downloadImportReportButton.addEventListener('click', () => {
+      if (!latestImportReport) {
+        setImportStatus('Run an import first to generate a downloadable report.', 'status-error');
+        return;
+      }
+      downloadImportReport(latestImportReport);
+    });
+  }
+
+  importIssuesForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    const messages = [];
+    const validation = validateImportRequest();
+
+    if (!validation.isValid) {
+      importValidationWarning.hidden = false;
+      setImportStatus(validation.message, 'status-error');
+      updateImportReport({
+        repoConnection: 'Validation failed',
+        messages: [validation.message],
+      });
+      return;
+    }
+
+    importValidationWarning.hidden = true;
+    importIssuesButton.disabled = true;
+    const importSpeedConfig = getImportSpeedConfig(validation.importSpeed);
+    setImportStatus(`Starting import (${importSpeedConfig.label} mode)...`, 'loading');
+    messages.push(`INFO: Import speed set to ${importSpeedConfig.label} mode.`);
+
+    const issueFiles = validation.files
+      .filter(isIssueFile)
+      .sort((left, right) => (parseIssueNumberFromFileName(left.name) || 0) - (parseIssueNumberFromFileName(right.name) || 0));
+
+    const mediaFileCount = validation.files.filter((file) => isLikelyMediaAssetFile(file.name)).length;
+
+    if (!issueFiles.length) {
+      const noIssuesMessage = 'No issue-<number>.html files were found in the selected folder.';
+      setImportStatus(noIssuesMessage, 'status-error');
+      updateImportReport({
+        importSpeed: importSpeedConfig.speed,
+        repoConnection: 'Not attempted',
+        mediaAttempted: mediaFileCount,
+        mediaSucceeded: 0,
+        mediaFailed: mediaFileCount,
+        messages: [noIssuesMessage],
+      });
+      importIssuesButton.disabled = false;
+      return;
+    }
+
+    let repoConnectionStatus = 'Connected';
+    let issuesSucceeded = 0;
+    let issuesFailed = 0;
+
+    try {
+      setImportStatus('Verifying target repository access...', 'loading');
+      await verifyTargetIssuesEndpoint(validation.targetUrl, validation.token);
+
+      setImportStatus(`Parsing ${issueFiles.length} issue file(s)...`, 'loading');
+      const parsedIssues = await Promise.all(issueFiles.map(parseIssueHtmlFile));
+
+      for (let index = 0; index < parsedIssues.length; index += 1) {
+        const parsedIssue = parsedIssues[index];
+        const remainingAfterCurrent = parsedIssues.length - (index + 1);
+        const estimatedRemainingMs = remainingAfterCurrent * importSpeedConfig.requestDelayMs;
+        const etaText = formatDuration(estimatedRemainingMs);
+        setImportStatus(`Importing issue ${index + 1}/${parsedIssues.length}: ${parsedIssue.title} · ETA ~ ${etaText}`, 'loading');
+
+        try {
+          await createIssueInTargetRepo(validation.targetUrl, validation.token, {
+            title: parsedIssue.title,
+            body: parsedIssue.body,
+            labels: parsedIssue.labels,
+          }, importSpeedConfig, ({ attempt, maxAttempts, waitMilliseconds, status }) => {
+            const seconds = Math.ceil(waitMilliseconds / 1000);
+            const retryMessage = `RATE LIMIT: Issue ${parsedIssue.sourceFileName} hit HTTP ${status}. Waiting ${seconds}s before retry ${attempt + 1}/${maxAttempts}.`;
+            messages.push(retryMessage);
+            setImportStatus(`Rate limited by GitHub. Waiting ${seconds}s before retrying...`, 'loading');
+          });
+          issuesSucceeded += 1;
+          messages.push(`SUCCESS: ${parsedIssue.sourceFileName} imported.`);
+        } catch (error) {
+          issuesFailed += 1;
+          messages.push(`FAILED: ${parsedIssue.sourceFileName} could not be imported. ${error.message}`);
+        }
+
+        if (index < parsedIssues.length - 1) {
+          await sleep(importSpeedConfig.requestDelayMs);
+        }
+      }
+
+      const mediaRefsAttempted = parsedIssues.reduce((total, issue) => total + issue.mediaReferences.length, 0);
+      const mediaAttempted = Math.max(mediaFileCount, mediaRefsAttempted);
+      const mediaFailed = mediaAttempted;
+
+      if (mediaAttempted > 0) {
+        messages.push('INFO: Media files/references were detected, but direct media upload to GitHub Issues is not supported by this browser-only import flow.');
+      }
+
+      updateImportReport({
+        importSpeed: importSpeedConfig.speed,
+        repoConnection: repoConnectionStatus,
+        issuesAttempted: parsedIssues.length,
+        issuesSucceeded,
+        issuesFailed,
+        mediaAttempted,
+        mediaSucceeded: 0,
+        mediaFailed,
+        messages,
+      });
+
+      if (issuesFailed === 0) {
+        setImportStatus(`Import complete. ${issuesSucceeded} issue(s) imported successfully.`, 'status-success');
+      } else {
+        setImportStatus(`Import finished with partial failures. ${issuesSucceeded} succeeded, ${issuesFailed} failed.`, 'status-error');
+      }
+    } catch (error) {
+      repoConnectionStatus = 'Failed';
+      messages.push(error.message);
+
+      updateImportReport({
+        importSpeed: importSpeedConfig.speed,
+        repoConnection: repoConnectionStatus,
+        issuesAttempted: issueFiles.length,
+        issuesSucceeded,
+        issuesFailed: Math.max(issuesFailed, issueFiles.length - issuesSucceeded),
+        mediaAttempted: mediaFileCount,
+        mediaSucceeded: 0,
+        mediaFailed: mediaFileCount,
+        messages,
+      });
+
+      setImportStatus(`Import failed: ${error.message}`, 'status-error');
+    } finally {
+      importIssuesButton.disabled = false;
+    }
+  });
 }

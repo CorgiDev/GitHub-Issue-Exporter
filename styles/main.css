@@ -47,6 +47,14 @@ input, select {
   width: 100%;
 }
 
+textarea {
+  border: 1px solid #000000;
+  border-radius: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  font: inherit;
+  width: 100%;
+}
+
 /* Override for multiple select to allow height to grow */
 select[multiple] {
     height: auto;
@@ -157,6 +165,7 @@ fieldset {
     border-radius: 0.75rem;
     grid-column-start: 1;
     grid-column-end:span 3;
+    margin: 5px;
 }
 
 fieldset div {
@@ -212,4 +221,33 @@ kbd {
 
 .fullRow {
   grid-row: span 1;
+}
+
+#importIssueSection {
+  padding: 0.75rem 1rem 1rem;
+}
+
+#importIssueSection h2 {
+  margin-bottom: 0.5rem;
+}
+
+#importIssueSection > p {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+}
+
+#importIssuesForm {
+  display: grid;
+  gap: 0.75rem;
+}
+
+#importIssueSection fieldset {
+  min-width: 0;
+  width: 100%;
+  margin: 0;
+  padding: 0.75rem 1rem 1rem;
+}
+
+#importIssueSection .form-actions {
+  margin-top: 0.5rem;
 }
