@@ -3,133 +3,140 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>GitHub Issue Exporter</title>
+    <title>GitHub Issue Tools</title>
     <link rel="stylesheet" href="styles/main.css" />
   </head>
   <body>
     <main class="container">
-      <h1>GitHub Issue Exporter</h1>
-      <p>Created with ❤️ by CorgiDev and Copilot Chat in VSCode. Check it out!</p>
-      
-      <form id="search-form" class="search-form">
-        <fieldset>
-            <legend>GitHub Repository Information</legend>
-            <p class="descriptionText">To get started, please provide the following information about the GitHub repository you want to export issues from. You will also need to provide a GitHub Access Token with the necessary permissions to read the repository's issues.</p>
-            <label>
-                GitHub Access Token (Required)<br>
-                <input
-                type="password"
-                id="token"
-                name="token"
-                placeholder="ghp_..."
-                autocomplete="off"
-                required
-                />
-            </label>
-            <br>
+      <h1>GitHub Issue Tools</h1>
+      <p>The following tools are available to help you with querying and exporting GitHub Issues. If you would like to import issues you previously exported, check out the <a href="import-tool.html">GitHub Issue Importer</a>.</p>
 
-            <label>
-                Repository Owner (Required)<br>
-                <input type="text" id="owner" name="owner" placeholder="e.g., microsoft" required />
-            </label>
-            <br>
+      <section aria-labelledby="issueSearchHeading">
+        <h2 id="issueSearchHeading">Issue Search</h2>
+        <form id="search-form" class="search-form">
+          <fieldset id="githubRepoInfo">
+              <legend>GitHub Repository Information</legend>
+              <p class="descriptionText">To get started, please provide the following information about the GitHub repository you want to export issues from. You will also need to provide a GitHub Access Token with the necessary permissions to read the repository's issues.</p>
+              <label>
+                  GitHub Access Token (Required)<br>
+                  <input
+                  type="password"
+                  id="token"
+                  name="token"
+                  placeholder="ghp_..."
+                  autocomplete="off"
+                  required
+                  />
+              </label>
+              <br>
 
-            <label>
-                Repository Name (Required)<br>
-                <input type="text" id="repo" name="repo" placeholder="e.g., vscode" required/>
-            </label>
-            <br>
+              <label>
+                  Repository Owner (e.g., microsoft)(Required)<br>
+                  <input type="text" id="owner" name="owner" placeholder="e.g., microsoft" required />
+              </label>
+              <br>
 
-            <div id="signOutDiv">
-                <button type="button" id="signOutButton" class="secondary-button" aria-describedby="SignoutDescription">Remove Token</button>
-                <div id="SignoutDescription">Using the Remove Token button removes the GitHub access token used by this app from your local storage, if you added one.</div>
-            </div>
-        </fieldset>
+              <label>
+                  Repository Name (e.g., vscode) (Required)<br>
+                  <input type="text" id="repo" name="repo" placeholder="e.g., vscode" required/>
+              </label>
+              <br>
 
-        <div id="stateFilterDiv">
-            <label for="stateFilter">State Filter (Defaults to Open issues)</label><br>
-            <select id="stateFilter" name="stateFilter">
-                <option value="open" selected>Open Issues</option>
-                <option value="closed">Closed Issues</option>
-            </select>
+              <div id="signOutDiv">
+                  <button type="button" id="signOutButton" class="secondary-button" aria-describedby="SignoutDescription">Remove Query/Export Token</button>
+                  <div id="SignoutDescription">Using the Remove Query/Export Token button removes the GitHub access token used by this app from your local storage, if you added one.</div>
+              </div>
+          </fieldset>
+
+          <div id="stateFilterDiv">
+              <label for="stateFilter">State Filter (Defaults to Open issues)</label><br>
+              <select id="stateFilter" name="stateFilter">
+                  <option value="open" selected>Open Issues</option>
+                  <option value="closed">Closed Issues</option>
+              </select>
+          </div>
+          
+          <fieldset id="labelFiltersFields" aria-describedby="fieldsetDescriptor">
+              <legend>Label Filters</legend>
+              <div id="fieldsetDescriptor" class="descriptionText">
+                  <ul>
+                      <li>All fields in the GitHub Repository Information must be filled in to populate label options.</li>
+                      <li>Use the "Load Repo Labels" button to populate the label options. It will pull all the labels available in the selected repo.</li>
+                      <li>You can select/unselect multiple labels by clicking on them.</li>
+                      <li>Using the "Clear selected labels" buttons removes all the labels currently selected from its respective selection menu.</li>
+                  </ul>
+              </div>
+              <div id="loadLabelsButtonDiv">
+                  <button type="button" id="fetchLabelsButton" class="secondary-button">Load Repo Labels</button>
+                  <span id="labelFetchStatus" class="status-small"></span>
+              </div>
+              <div>
+                  <label for="includeLabelsAll" id="includeAllLabel">Include Labels - ALL</label>
+                  <span class="descriptionText" id="includeLabelsAllDescription">Filters for issues that have all of the selected labels.</span>
+                  <br>
+                  <input type="text" class="filter-input" placeholder="Type to filter..." aria-label="Filter Include All Labels" data-target="includeLabelsAll">
+                  <select id="includeLabelsAll" name="includeLabelsAll" multiple size="5" class="label-select"></select>
+                <button type="button" class="secondary-button clear-label-button" data-target="includeLabelsAll" aria-describedby="includeAllLabel">Clear selected labels</button>
+              </div>
+              <div>
+                  <label for="includeLabelsAny" id="includeAnyLabel">Include Labels - ANY</label>
+                  <span class="descriptionText" id="includeLabelsAnyDescription">Filters for issues that have any of the selected labels.</span>
+                  <br>
+                  <input type="text" class="filter-input" placeholder="Type to filter..." aria-label="Filter Include Any Labels" data-target="includeLabelsAny">
+                  <select id="includeLabelsAny" name="includeLabelsAny" multiple size="5" class="label-select"></select>
+                <button type="button" class="secondary-button clear-label-button" data-target="includeLabelsAny"  aria-describedby="includeAnyLabel">Clear selected labels</button>
+              </div>
+              <div>
+                  <label for="excludeLabelsAll" id="excludeAllLabel">Exclude Labels - ALL</label>
+                  <span class="descriptionText" id="excludeLabelsAllDescription">Filters out issues that have all of the selected labels.</span>
+                  <br>
+                  <input type="text" class="filter-input" placeholder="Type to filter..." aria-label="Filter Exclude All Labels" data-target="excludeLabelsAll">
+                  <select id="excludeLabelsAll" name="excludeLabelsAll" multiple size="5" class="label-select"></select>
+                <button type="button" class="secondary-button clear-label-button" data-target="excludeLabelsAll" aria-describedby="excludeAllLabel">Clear selected labels</button>
+              </div>
+              <div>
+                  <label for="excludeLabelsAny" id="excludeAnyLabel">Exclude Labels - ANY</label>
+                  <span class="descriptionText" id="excludeLabelsAnyDescription">Filters out issues that have any of the selected labels.</span>
+                  <br>
+                  <input type="text" class="filter-input" placeholder="Type to filter..." aria-label="Filter Exclude Any Labels" data-target="excludeLabelsAny">
+                  <select id="excludeLabelsAny" name="excludeLabelsAny" multiple size="5" class="label-select"></select>
+                <button type="button" class="secondary-button clear-label-button" data-target="excludeLabelsAny" aria-describedby="excludeAnyLabel">Clear selected labels</button>
+              </div>
+          </fieldset>
+
+          <div class="form-actions">
+            <button type="submit">Search Issues</button>
+          </div>
+        </form>
+      </section>
+
+      <section aria-label="Search Results">
+        <h2>Search Results</h2>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+
+        <div id="export-section" class="export-section" hidden>
+          <button type="button" id="exportButton" class="export-button fullRow" aria-describedby="exportBugMessage">Export Results as Offline HTML</button>
+          <p id="exportBugMessage" class="fullRow">Currently, when you export results, images and videos will not be included. However, the file names and a message mentioning there would have been media present still displays. This issue is due to browser/site cross origin restrictions (CORs), and should be corrected in a future update.</p>
         </div>
-        
-        <fieldset id="labelFiltersFields" aria-describedby="fieldsetDescriptor">
-            <legend>Label Filters</legend>
-            <div id="fieldsetDescriptor" class="descriptionText">
-                <ul>
-                    <li>All fields in the GitHub Repository Information must be filled in to populate label options.</li>
-                    <li>Use the "Load Repo Labels" button to populate the label options. It will pull all the labels available in the selected repo.</li>
-                    <li>You can select/unselect multiple labels by clicking on them.</li>
-                    <li>Using the "Clear selected labels" buttons removes all the labels currently selected from its respective selection menu.</li>
-                </ul>
-            </div>
-            <div id="loadLabelsButtonDiv">
-                <button type="button" id="fetchLabelsButton" class="secondary-button">Load Repo Labels</button>
-                <span id="labelFetchStatus" class="status-small"></span>
-            </div>
-            <div>
-                <label for="includeLabelsAll" id="includeAllLabel">Include Labels - ALL</label>
-                <span class="descriptionText" id="includeLabelsAllDescription">Filters for issues that have all of the selected labels.</span>
-                <br>
-                <input type="text" class="filter-input" placeholder="Type to filter..." aria-label="Filter Include All Labels" data-target="includeLabelsAll">
-                <select id="includeLabelsAll" name="includeLabelsAll" multiple size="5" class="label-select"></select>
-              <button type="button" class="secondary-button clear-label-button" data-target="includeLabelsAll" aria-describedby="includeAllLabel">Clear selected labels</button>
-            </div>
-            <div>
-                <label for="includeLabelsAny" id="includeAnyLabel">Include Labels - ANY</label>
-                <span class="descriptionText" id="includeLabelsAnyDescription">Filters for issues that have any of the selected labels.</span>
-                <br>
-                <input type="text" class="filter-input" placeholder="Type to filter..." aria-label="Filter Include Any Labels" data-target="includeLabelsAny">
-                <select id="includeLabelsAny" name="includeLabelsAny" multiple size="5" class="label-select"></select>
-              <button type="button" class="secondary-button clear-label-button" data-target="includeLabelsAny"  aria-describedby="includeAnyLabel">Clear selected labels</button>
-            </div>
-            <div>
-                <label for="excludeLabelsAll" id="excludeAllLabel">Exclude Labels - ALL</label>
-                <span class="descriptionText" id="excludeLabelsAllDescription">Filters out issues that have all of the selected labels.</span>
-                <br>
-                <input type="text" class="filter-input" placeholder="Type to filter..." aria-label="Filter Exclude All Labels" data-target="excludeLabelsAll">
-                <select id="excludeLabelsAll" name="excludeLabelsAll" multiple size="5" class="label-select"></select>
-              <button type="button" class="secondary-button clear-label-button" data-target="excludeLabelsAll" aria-describedby="excludeAllLabel">Clear selected labels</button>
-            </div>
-            <div>
-                <label for="excludeLabelsAny" id="excludeAnyLabel">Exclude Labels - ANY</label>
-                <span class="descriptionText" id="excludeLabelsAnyDescription">Filters out issues that have any of the selected labels.</span>
-                <br>
-                <input type="text" class="filter-input" placeholder="Type to filter..." aria-label="Filter Exclude Any Labels" data-target="excludeLabelsAny">
-                <select id="excludeLabelsAny" name="excludeLabelsAny" multiple size="5" class="label-select"></select>
-              <button type="button" class="secondary-button clear-label-button" data-target="excludeLabelsAny" aria-describedby="excludeAnyLabel">Clear selected labels</button>
-            </div>
-        </fieldset>
 
-        <div class="form-actions">
-          <button type="submit">Search Issues</button>
+        <div class="table-wrap">
+          <table id="results-table" hidden>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Title</th>
+                <th>Created Date</th>
+                <th>Labels on Issue</th>
+                <th>Issue's GitHub URL</th>
+              </tr>
+            </thead>
+            <tbody id="results-body"></tbody>
+          </table>
         </div>
-      </form>
-
-      <p id="status" class="status" role="status" aria-live="polite"></p>
-
-      <div id="export-section" class="export-section" hidden>
-        <button type="button" id="exportButton" class="export-button fullRow" aria-describedby="exportBugMessage">Export Results as Offline HTML</button>
-        <p id="exportBugMessage" class="fullRow">Currently, when you export results to a set of offline HTML files, images and videos will not be included. However, the file names and a message mentioning there would have been media present still displays. This issue is due to browser/site cross origin restrictions (CORs), and should be corrected in a future update.</p>
-      </div>
-
-      <div class="table-wrap">
-        <table id="results-table" hidden>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Title</th>
-              <th>Created Date</th>
-              <th>Labels on Issue</th>
-              <th>Issue's GitHub URL</th>
-            </tr>
-          </thead>
-          <tbody id="results-body"></tbody>
-        </table>
-      </div>
+      </section>
     </main>
 
+    <footer><p>Created with ❤️ by CorgiDev and Copilot Chat in VSCode!</p></footer>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="scripts/app.js"></script>
   </body>
