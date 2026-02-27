@@ -847,7 +847,6 @@ tr:hover {
 
 a {
   color: #0969da;
-  text-decoration: none;
 }
 
 a:hover {
@@ -918,35 +917,40 @@ const generateIndexHTML = (issues, owner, repo, filters) => {
 </head>
 <body>
   <div class="container">
-    <h1>GitHub Issues: ${escapeHtml(owner)}/${escapeHtml(repo)}</h1>
-    <p>Exported on ${new Date().toLocaleString()}</p>
-    
-    <div class="issue-filters">
-      <h2>Issue Filters Applied</h2>
-      <ul>
-        ${filterItems}
-      </ul>
-    </div>
-    
-    <h2>Issue List</h2>
-    <p>Clicking on an issue's title will take you to a detailed view of the issue at the time it was exported, including its description and comments, all available offline.</p>
-    <p>In the event that any content within the issue does not load, or is inaccessible offline, contact whomever you sourced the export from for additional details.</p>
-    <p><strong>${issues.length}</strong> issue(s) found</p>
-    
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Title</th>
-          <th>Created Date</th>
-          <th>Labels on Issue</th>
-          <th>Original GitHub URL</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${issuesRows}
-      </tbody>
-    </table>
+    <head>
+      <h1>GitHub Issues: ${escapeHtml(owner)}/${escapeHtml(repo)}</h1>
+      <p>Exported on ${new Date().toLocaleString()}</p>
+    </head>  
+    <main>
+      <section aria-labelledby="appliedFiltersSection">
+        <div class="issue-filters">
+          <h2 id="appliedFiltersSection">Issue Filters Applied</h2>
+          <ul>
+            ${filterItems}
+          </ul>
+        </div>
+      </section>
+      <section aria-labelledby="issueListSection">
+        <h2 id="issueListSection">Issue List</h2>
+        <p>Clicking on an issue's title will take you to a detailed view of the issue at the time it was exported, including its description and comments, all available offline.</p>
+        <p>In the event that any content within the issue does not load, or is inaccessible offline, contact whomever you sourced the export from for additional details.</p>
+        <p><strong>${issues.length}</strong> issue(s) found</p>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Title</th>
+              <th>Created Date</th>
+              <th>Labels on Issue</th>
+              <th>Original GitHub URL</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${issuesRows}
+          </tbody>
+        </table>
+      </section>
+    </main>
   </div>
 </body>
 </html>`;
