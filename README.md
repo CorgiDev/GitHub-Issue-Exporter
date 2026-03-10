@@ -1,8 +1,8 @@
 # GitHub-Issue-Exporter
 
-A simple web app to search open GitHub issues by repository and label filters.
+A simple web app to search open GitHub issues by repository and label filters. The app uses the user's GitHub access token to authenticate requests, which helps reduce API rate limit issues and enforces repository permissions.
 
-The app uses the user's GitHub access token to authenticate requests, which helps reduce API rate limit issues and enforces repository permissions.
+GitHub Pages Version: https://corgidev.github.io/GitHub-Issue-Exporter/
 
 ## How to run
 
