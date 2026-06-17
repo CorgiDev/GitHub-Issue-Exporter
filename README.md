@@ -4,7 +4,7 @@ A simple web app to search open GitHub issues by repository and label filters. T
 
 GitHub Pages Version: https://corgidev.github.io/GitHub-Issue-Exporter/
 
-## How to run
+## How to run locally
 
 Because this app uses browser `fetch`, run it from a local web server (not directly as a `file://` page).
 
@@ -23,6 +23,7 @@ http://localhost:8080
 ## Search inputs
 
 - GitHub access token (required)
+   - Must have read access to Issues in the relevant repo.
 - Repository owner
 - Repository name
 - **State Filter**: Choose to search for open issues, closed issues, or all issues (defaults to all if not selected)
