@@ -77,6 +77,22 @@ The export feature comprehensively extracts and downloads:
 
 Media that cannot be downloaded (due to CORS restrictions or network errors) will keep their original URLs as fallback links.
 
+#### Code Snippets for Media
+
+To aid in linking media, you can use the following snippets. With these you would just need to swap out the `fileName` placeholder for the actual name of the video or image, and add an image description in the `alt` element of the `img` element.
+
+Be careful to update the video HTML element if the video downloads in a format other than MP4.
+
+```html
+<video controls width="90%">
+  <source src="assets/fileName.mp4" type="video/mp4" />
+  Download the <a href="assets/fileName.mp4">MP4</a> video.
+</video>
+```
+```html
+<img src="assets/fileName.png" alt="imageDescription" style="border: 1px solid black;"/>
+```
+
 ### Exported Site Structure
 
 - **index.html**: Home page displaying all search results in a table
